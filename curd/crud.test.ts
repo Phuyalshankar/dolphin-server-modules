@@ -1,5 +1,6 @@
 import { createCRUD, DatabaseAdapter, BaseDocument, QueryFilter, PaginationOptions } from './crud';
 
+
 class MockDB implements DatabaseAdapter {
   private data: Record<string, BaseDocument[]> = {};
 
@@ -119,5 +120,77 @@ describe('CRUD Factory', () => {
     const sorted = await crud.read('scores', {}, { sort: { p: 'desc' } });
     expect(sorted[0].p).toBe(50);
     expect(sorted[3].p).toBe(10);
+  });
+});
+
+describe('CRUD Controller', () => {
+  let db: MockDB;
+  
+  beforeEach(() => {
+    db = new MockDB();
+  });
+
+  const mockCtx = (overrides: any = {}) => ({
+    query: {},
+    params: {},
+    body: {},
+    req: { user: { id: 'user_1' } },
+    json: jest.fn(),
+    status: jest.fn().mockReturnThis(),
+    ...overrides
+  });
+
+  it('handles getAll with query filters', async () => {
+    const adapter = new MockDB();
+    await adapter.create('posts', { id: '1', title: 'A', userId: 'user_1' });
+    await adapter.create('posts', { id: '2', title: 'B', userId: 'user_1' });
+    
+    // Model metadata format
+    const model = { adapter, collection: 'posts' };
+    const controller = (require('./crud') as any).createCrudController(model);
+    
+    const ctx = mockCtx({ query: { title: 'A' } });
+    await controller.getAll(ctx);
+    
+    expect(ctx.json).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ title: 'A' })]));
+    expect(ctx.json.mock.calls[0][0].length).toBe(1);
+  });
+
+  it('handles create and returns 201', async () => {
+    const adapter = new MockDB();
+    const model = { adapter, collection: 'items' };
+    const controller = (require('./crud') as any).createCrudController(model);
+    
+    const ctx = mockCtx({ body: { name: 'New Item' } });
+    await controller.create(ctx);
+    
+    expect(ctx.status).toHaveBeenCalledWith(201);
+    expect(ctx.json).toHaveBeenCalledWith(expect.objectContaining({ name: 'New Item', userId: 'user_1' }));
+  });
+
+  it('handles getOne and returns 404 if not found', async () => {
+    const adapter = new MockDB();
+    const model = { adapter, collection: 'items' };
+    const controller = (require('./crud') as any).createCrudController(model);
+    
+    const ctx = mockCtx({ params: { id: 'nonexistent' } });
+    await controller.getOne(ctx);
+    
+    expect(ctx.status).toHaveBeenCalledWith(404);
+    expect(ctx.json).toHaveBeenCalledWith({ error: 'Not Found' });
+  });
+
+  it('handles delete and returns success', async () => {
+    const adapter = new MockDB();
+    const doc = await adapter.create('items', { id: '123', userId: 'user_1' });
+    const model = { adapter, collection: 'items' };
+    const controller = (require('./crud') as any).createCrudController(model);
+    
+    const ctx = mockCtx({ params: { id: '123' } });
+    await controller.delete(ctx);
+    
+    expect(ctx.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    const remaining = await adapter.read('items', { id: '123' });
+    expect(remaining.length).toBe(0);
   });
 });

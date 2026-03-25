@@ -1,15 +1,27 @@
 {
   "name": "dolphin-server-modules",
-  "version": "1.0.0",
+  "version": "1.1.1",
+  "homepage": "https://github.com/Phuyalshankar/dolphin-server-modules#readme",
   "description": "Core utility modules for Auth, CRUD, and Controllers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "TUTORIAL_NEPALI.md",
+    "DOLPHIN_MASTER_GUIDE_NEPALI.md"
+  ],
   "exports": {
     ".": "./dist/index.js",
     "./auth": "./dist/auth/auth.js",
     "./controller": "./dist/controller/controller.js",
     "./crud": "./dist/curd/crud.js",
-    "./middleware/zod": "./dist/middleware/zod.js"
+    "./curd": "./dist/curd/crud.js",
+    "./middleware/zod": "./dist/middleware/zod.js",
+    "./adapters/mongoose": "./dist/adapters/mongoose/index.js",
+    "./server": "./dist/server/server.js",
+    "./router": "./dist/router/router.js"
   },
   "scripts": {
     "build": "tsc",
@@ -33,6 +45,7 @@
     "@types/jest": "^29.5.12",
     "@types/node": "^20.11.30",
     "jest": "^29.7.0",
+    "mongoose": "^9.3.2",
     "ts-jest": "^29.1.2",
     "typescript": "^5.4.3"
   }

@@ -265,3 +265,58 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
     }
   };
 }
+
+// ===== CRUD Controller (Handler Wrapper) =====
+export function createCrudController<T extends BaseDocument = BaseDocument>(
+  modelInfoOrAdapter: any,
+  collectionName?: string
+) {
+  let adapter: DatabaseAdapter;
+  let collection: string;
+
+  if (collectionName) {
+    adapter = modelInfoOrAdapter;
+    collection = collectionName;
+  } else if (modelInfoOrAdapter && modelInfoOrAdapter.adapter && modelInfoOrAdapter.collection) {
+    adapter = modelInfoOrAdapter.adapter;
+    collection = modelInfoOrAdapter.collection;
+  } else {
+    throw new Error('Invalid arguments to createCrudController. Expected (adapter, collection) or ({ adapter, collection })');
+  }
+
+  const service = createCRUD<T>(adapter);
+
+  return {
+    getAll: async (ctx: any) => {
+      const { limit, offset, ...filters } = ctx.query;
+      const results = await service.read(collection, filters, {
+        limit: limit ? parseInt(limit) : undefined,
+        offset: offset ? parseInt(offset) : undefined
+      }, ctx.req.user?.id);
+      ctx.json(results);
+    },
+
+    getOne: async (ctx: any) => {
+      const result = await service.readOne(collection, ctx.params.id, ctx.req.user?.id);
+      if (!result) return ctx.status(404).json({ error: 'Not Found' });
+      ctx.json(result);
+    },
+
+    create: async (ctx: any) => {
+      const result = await service.create(collection, ctx.body, ctx.req.user?.id);
+      ctx.status(201).json(result);
+    },
+
+    update: async (ctx: any) => {
+      const result = await service.updateOne(collection, ctx.params.id, ctx.body, ctx.req.user?.id);
+      if (!result) return ctx.status(404).json({ error: 'Not Found' });
+      ctx.json(result);
+    },
+
+    delete: async (ctx: any) => {
+      const result = await service.deleteOne(collection, ctx.params.id, ctx.req.user?.id);
+      if (!result) return ctx.status(404).json({ error: 'Not Found' });
+      ctx.json({ success: true, deleted: result });
+    }
+  };
+}

@@ -10,3 +10,6 @@ export {
   PaginationOptions,
   DatabaseAdapter as CrudDatabaseAdapter
 } from './curd/crud';
+// Re-export Server & Router
+export * from './server/server';
+export * from './router/router';

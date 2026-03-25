@@ -1,120 +1,141 @@
-# Dolphin Server Modules 🐬
+# Dolphin Framework 🐬
 
-A world-class, extremely lightweight, and 100% modular backend utility package for Node.js. It provides plug-and-play modules for Authentication, standard CRUD operations, Next.js/Express Controllers, and Zod validation. 
+**Dolphin** is a world-class, ultra-lightweight, and 100% modular backend framework built on native Node.js. It is designed for extreme performance, minimal boilerplate, and a developer-first experience.
 
-Build production-grade APIs in minutes!
+> "Close to native Node.js speed, with the developer experience of a premium framework."
+
+---
+
+### 📘 Official Master Guide (Nepal)
+Dolphin Framework को विस्तृत र आधिकारिक गाइड अब उपलब्ध छ। यसमा **Auth, CRUD, Models, र Controllers** को १००% ट्युटोरियल समावेश छ।
+
+👉 **[Dolphin Master Guide (PDF)](https://github.com/Phuyalshankar/dolphin-server-modules/blob/main/DOLPHIN_MASTER_GUIDE_NEPALI.pdf)**
+
+---
+
+## 🚀 Core Philosophy
+- **Zero-Dependency Core**: Built on the native Node.js `http` module. No Express, no Fastify overhead.
+- **Extreme Modularity**: Use only what you need. Auth, CRUD, and Routing are all independent.
+- **Performance First**: Optimized matching engines and minimal object allocation.
+- **Type-Safe by Design**: First-class TypeScript support across all modules.
+
+---
 
 ## 📦 Installation
-
 ```bash
 npm install dolphin-server-modules
 ```
 
-You will also need to install `argon2` and `zod` if you are using the auth and validation modules respectively:
-```bash
-npm install argon2 zod
+---
+
+## 🚀 Quick Start (Complete Tutorial)
+
+Building a high-performance API with Dolphin is simple. Here is a full example:
+
+### 1. Define your Database (Mongoose)
+```typescript
+import mongoose from 'mongoose';
+import { createMongooseAdapter } from 'dolphin-server-modules/adapters/mongoose';
+
+const User = mongoose.model('User', new mongoose.Schema({
+  email: { type: String, required: true },
+  password: { type: String, required: true }
+}));
+
+const db = createMongooseAdapter({ User });
 ```
 
-## 🚀 100% Modular Structure
-You can import exactly what you need without bloating your project.
-
+### 2. Initialize and Secure your Server
 ```typescript
+import { createDolphinServer } from 'dolphin-server-modules/server';
 import { createAuth } from 'dolphin-server-modules/auth';
-import { createCRUD } from 'dolphin-server-modules/crud';
-import { createDolphinController } from 'dolphin-server-modules/controller';
-import { validateStructure } from 'dolphin-server-modules/middleware/zod';
+
+const app = createDolphinServer();
+const auth = createAuth({ secret: 'SUPER_SECRET' });
+
+// Global Middleware (Dolphin Style)
+app.use((ctx, next) => {
+  console.log(`🐬 ${ctx.req.method} ${ctx.req.url}`);
+  next();
+});
+
+// Global Middleware (Express Style - Unified Compatibility!)
+import cors from 'cors';
+app.use(cors()); // Just works!
+
+// Hello World
+app.get('/', (ctx) => ctx.json({ message: "Welcome to Dolphin!" }));
+
+// Secure Route
+app.get('/profile', auth.middleware(), (ctx) => {
+  ctx.json({ user: ctx.req.user });
+});
+
+// Dynamic Params
+app.get('/users/:id', (ctx) => ctx.json({ id: ctx.params.id }));
+
+app.listen(3000, () => console.log("Dolphin swimming on port 3000!"));
 ```
 
 ---
 
-## 🔒 1. Auth Module (`/auth`)
-Production-ready authentication supporting **argon2 password hashing**, **JWT**, and **TOTP (2FA)**. It also ships with internal memory LRU caches for protecting against token-reuse and rate-limiting.
+## 🛠️ Key Features
 
+### ⚡ 1. Native High-Performance Server (`/server`)
+A thin wrapper around native `http` with a modern `Context` (ctx) based API.
 ```typescript
-import { createAuth } from 'dolphin-server-modules/auth';
+import { createDolphinServer } from 'dolphin-server-modules/server';
 
-const auth = createAuth({ 
-  secret: 'YOUR_SUPER_SECRET_KEY', 
-  cookieMaxAge: 7 * 86400000 // 7 days
-});
+const app = createDolphinServer();
 
-// Register
-const user = await auth.register(db, { email: 'user@example.com', password: 'password123' });
+app.get('/ping', (ctx) => ctx.json({ message: 'pong' }));
 
-// Login (Supports 2FA Totp)
-const session = await auth.login(db, { email: 'user@example.com', password: 'password123' });
-console.log(session.accessToken);
+app.listen(3000);
 ```
 
----
-
-## 💾 2. CRUD Module (`/crud`)
-A powerful Factory interface for databases providing instant pagination, soft-deletes, and ownership-checks out of the box.
-
+### 🛣️ 2. Intelligent Routing (`/router`)
+Uses a hybrid Radix Tree + Static Map approach for $O(1)$ and $O(L)$ matching. Supports dynamic path parameters out of the box.
 ```typescript
-import { createCRUD } from 'dolphin-server-modules/crud';
-
-const crud = createCRUD(myDatabaseAdapter, { 
-    softDelete: true, 
-    enforceOwnership: true 
-});
-
-// Automatically creates a record with generated IDs and createdAt fields
-const newPost = await crud.create('posts', { title: 'Hello World' }, 'user_id_1');
-
-// Read with Advanced Filtering
-const posts = await crud.read('posts', { 
-    $or: [{ title: { $like: 'Hello' } }, { rating: { $gt: 4 } }] 
-});
-
-// Soft Delete
-await crud.deleteOne('posts', newPost.id, 'user_id_1');
-
-// Restore Soft Deleted
-await crud.restore('posts', newPost.id, 'user_id_1');
-```
-
----
-
-## 🎮 3. Controller Module (`/controller`)
-Easily convert your `crud` instance into instant API Controllers. Supports Next.js App Router, Pages API, and Express out of the box.
-
-```typescript
-import { createDolphinController, createNextAppRoute } from 'dolphin-server-modules/controller';
-
-const postController = createDolphinController(crud, 'posts');
-
-// Next.js App Router API Route (app/api/posts/route.ts)
-export const { GET, POST, PUT, DELETE } = createNextAppRoute(postController);
-```
-
----
-
-## ✅ 4. Zod Validation Middleware (`/middleware/zod`)
-Validate your data effortlessly using `zod`. Protect your endpoints from bad data.
-
-```typescript
-import { z } from 'zod';
-import { validateAppRoute } from 'dolphin-server-modules/middleware/zod';
-
-const userSchema = z.object({
-  name: z.string().min(2),
-  age: z.number().gte(18)
-});
-
-// App Router Handler wrapped with validation
-const myPostHandler = validateAppRoute(userSchema, async (req, validatedData) => {
-    console.log(validatedData.name); // 100% typed and safe
-    return new Response('Success');
+app.get('/users/:id', (ctx) => {
+  return ctx.json({ userId: ctx.params.id });
 });
 ```
 
+### 🔒 3. Advanced Auth Module (`/auth`)
+Production-ready security with zero external bloat:
+- Argon2 Hashing & JWT (Timing-safe)
+- Refresh Token Rotation & Reuse Detection
+- 2FA (TOTP) + Recovery Code Management
+
+### 💾 4. Adapter-Based CRUD & Database (`/crud`)
+Seamlessly switch between databases with the Adapter pattern.
+- **Mongoose Adapter**: Included by default.
+- **Automated CRUD**: Just define a schema and get a full API.
+
+### ✅ 5. Zod-Powered Validation (`/middleware/zod`)
+Validate payloads and params with 100% type inference.
+
 ---
 
-## 🌐 Hosting Docs via GitHub Pages
-To host this documentation cleanly:
-1. Go to your repository **Settings** on GitHub.
-2. Click on **Pages** on the left sidebar.
-3. Under **Build and deployment**, select **Deploy from a branch**.
-4. Select `main` branch and `/ (root)` folder.
-5. Click **Save**. GitHub will automatically host this README as your documentation website!
+## 🗺️ Roadmap & Future Vision
+1. **`defineModel` Engine**: Define a schema once, auto-generate CRUD, validation, and types.
+2. **Plugin System**: A robust "hook" based system for extending the framework core.
+3. **IoT & WebSocket Support**: Dedicated ingestion layer for high-throughput data.
+4. **CLI Presets**: `npx dolphin init` for instant project scaffolding.
+
+---
+
+## 📊 Performance Comparison
+| Metric | Express | Fastify | **Dolphin** |
+| :--- | :--- | :--- | :--- |
+| **Overhead** | High | Low | **Ultra-Low (Native)** |
+| **Modularity** | Low | Medium | **Extreme** |
+| **DX** | Good | Excellent | **Premium** |
+
+---
+
+## 🌐 Documentation
+Detailed documentation is automatically hosted via GitHub Pages from this README.
+
+## 📄 License
+ISC © 2026 Dolphin Team
