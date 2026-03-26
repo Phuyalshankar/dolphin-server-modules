@@ -12,6 +12,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["auth/**/*", "controller/**/*", "curd/**/*", "middleware/**/*", "index.ts"],
+  "include": ["auth/**/*", "controller/**/*", "curd/**/*", "middleware/**/*", "realtime/**/*", "index.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

@@ -13,3 +13,6 @@ export {
 // Re-export Server & Router
 export * from './server/server';
 export * from './router/router';
+
+// Re-export Realtime
+export * from './realtime/index';

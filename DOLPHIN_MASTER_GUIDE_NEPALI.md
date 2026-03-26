@@ -19,6 +19,7 @@
 - [११. स्केलिङ र पर्फर्मेन्स (Scaling & Performance)](#११-स्केलिङ-र-पर्फर्मेन्स-scaling--performance)
 - [१२. टेस्टिङ र डेभप्स (Testing & DevOps)](#१२-टेस्टिङ-र-डेभप्स-testing--devops)
 - [१३. भविष्य र योगदान (Future Roadmap)](#१३-भविष्य-र-योगदान-future-roadmap)
+- [१४. रियलटाइम र IoT मास्टरक्लास (Realtime & IoT Masterclass) [NEW]](#१४-रियलटाइम-र-iot-मास्टरक्लास-realtime--iot-masterclass-new)
 
 ---
 
@@ -508,11 +509,56 @@ CMD ["npm", "start"]
 
 Dolphin अझै विकसित हुँदैछ। हाम्रो आगामी योजनाहरू:
 - **Dolphin CLI**: एउटा कमान्डले प्रोजेक्ट सेटअप गर्ने।
-- **WebSocket Support**: रियल-टाइम च्याटको लागि।
+- **Dolphin CLI**: एउटा कमान्डले प्रोजेक्ट सेटअप गर्ने।
+- **Realtime & IoT Integration**: उच्च क्षमताको डाटा इन्जेसनको लागि। [DONE]
 - **Native SQL Adapters**: PostgreSQL र MySQL का लागि विशेष एडाप्टरहरू।
 
 ### योगदान कसरी गर्ने?
 यदि तपाईँलाई यो फ्रेमवर्क मन पर्यो भने GitHub मा स्टार दिनुहोस् र पुल रिक्वेस्ट (PR) पठाउनुहोस्!
+
+---
+
+## १४. रियलटाइम र IoT मास्टरक्लास (Realtime & IoT Masterclass) [NEW]
+
+आधुनिक एप्लिकेसनहरूलाई केवल "Request-Response" मात्र पुग्दैन। तिनीहरूलाई "Real-time" डाटा चाहिन्छ। Dolphin को Realtime मोड्युलले यसलाई सम्भव बनाउँछ।
+
+### १४.१ रियलटाइम कोर (Realtime Core) के हो?
+यो एउटा इन्टरनल "Event Bus" हो जसले मेसेजहरूलाई एक ठाउँबाट अर्को ठाउँमा तुरुन्तै पुर्‍याउँछ। यसले MQTT जस्तो "Topic-based" सिस्टम प्रयोग गर्छ।
+
+### १४.२ मुख्य अवधारणाहरू (Key Concepts)
+१. **TopicTrie**: मेसेजहरू कुन टपिकमा जाने भनेर छिटो पत्ता लगाउने इन्जिन।
+२. **Binary Codec**: डाटालाई सानो बनाउन बाइनरी फर्म्याटमा लैजाने सफ्टवेयर।
+३. **Plugins**: विभिन्न प्रोटोकलहरू (HL7, Modbus) सपोर्ट गर्न।
+
+### १४.३ कोड उदाहरण: बेसिक पब-सब (Pub/Sub)
+```typescript
+import { RealtimeCore } from 'dolphin-server-modules/realtime';
+
+const rt = new RealtimeCore({
+  maxMessageSize: 512 * 1024 // ५१२ KB म्याक्स साइज
+});
+
+// १. सब्सक्राइब (Subscribe) गर्ने
+rt.subscribe('sensors/temperature/+', (ctx) => {
+  console.log(`नयाँ डाटा आयो: ${ctx.payload.value}°C`);
+});
+
+// २. पब्लिस (Publish) गर्ने
+rt.publish('sensors/temperature/room1', { value: 22.5 });
+```
+
+### १४.४ वाइल्डकार्डको शक्ति (Power of Wildcards)
+- `sensors/+`: `sensors/temp` र `sensors/hum` दुवै म्याच गर्छ।
+- `sensors/#`: `sensors/a/b/c` जति पनि गहिराइ (depth) सम्म म्याच गर्छ।
+
+### १४.५ रेडिस स्केलिङ (Redis Scaling)
+यदि तपाईँको धेरै वटा सर्भरहरू छन् भने, तिनीहरूलाई रेडिस मार्फत जोड्न सक्नुहुन्छ:
+```typescript
+const rt = new RealtimeCore({
+  redisUrl: 'redis://localhost:6379'
+});
+```
+यसो गर्दा एउटा सर्भरबाट पठाएको मेसेज अर्को सर्भरमा बस्ने युजरले पनि तुरुन्तै पाउँछ।
 
 ---
 

@@ -113,6 +113,26 @@ app.listen(3000, () => {
 
 ---
 
+## 8. Realtime & IoT Integration [NEW]
+Dolphin now supports high-performance realtime communication:
+
+```typescript
+import { RealtimeCore, JSONPlugin } from 'dolphin-server-modules/realtime';
+
+const rt = new RealtimeCore();
+rt.use(JSONPlugin);
+
+// Subscribe to topics
+rt.subscribe('sensors/+', (ctx) => {
+  console.log(`Topic: ${ctx.topic}, Data:`, ctx.payload);
+});
+
+// Publish
+rt.publish('sensors/temp', { value: 24.5 });
+```
+
+---
+
 ## 🚀 Performance Tips
 - Use **Context (ctx)** directly for JSON responses.
 - Keep your routes organized using prefixing (coming in v1.1.0).

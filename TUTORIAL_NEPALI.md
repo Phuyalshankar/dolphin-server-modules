@@ -180,7 +180,27 @@ app.post('/register', validate(registerSchema), (ctx) => {
 
 ---
 
-## ११. अन्तिममा (Conclusion)
+## ११. रियलटाइम र IoT (Realtime & IoT Core) [NEW]
+Dolphin ले अब उच्च क्षमताको रियलटाइम कम्युनिकेसन सपोर्ट गर्छ।
+
+```typescript
+import { RealtimeCore, JSONPlugin } from 'dolphin-server-modules/realtime';
+
+const rt = new RealtimeCore();
+rt.use(JSONPlugin);
+
+// टपिकहरूमा सब्सक्राइब (Subscribe) गर्नुहोस्
+rt.subscribe('sensors/+', (ctx) => {
+  console.log(`टपिक: ${ctx.topic}, डाटा:`, ctx.payload);
+});
+
+// पब्लिस (Publish) गर्नुहोस्
+rt.publish('sensors/temp', { value: 24.5 });
+```
+
+---
+
+## १२. अन्तिममा (Conclusion)
 
 Dolphin Framework निकै छिटो र सजिलो छ। यसले तपाईँको ब्याकइन्ड डेभलपमेन्टको अनुभवलाई नयाँ उचाइमा पुर्‍याउँछ।
 

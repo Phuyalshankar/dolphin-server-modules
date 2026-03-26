@@ -1,6 +1,6 @@
 {
   "name": "dolphin-server-modules",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "homepage": "https://github.com/Phuyalshankar/dolphin-server-modules#readme",
   "description": "Core utility modules for Auth, CRUD, and Controllers",
   "main": "dist/index.js",
@@ -21,7 +21,12 @@
     "./middleware/zod": "./dist/middleware/zod.js",
     "./adapters/mongoose": "./dist/adapters/mongoose/index.js",
     "./server": "./dist/server/server.js",
-    "./router": "./dist/router/router.js"
+    "./router": "./dist/router/router.js",
+    "./realtime": "./dist/realtime/index.js",
+    "./realtime/core": "./dist/realtime/core.js",
+    "./realtime/trie": "./dist/realtime/trie.js",
+    "./realtime/codec": "./dist/realtime/codec.js",
+    "./realtime/plugins": "./dist/realtime/plugins.js"
   },
   "scripts": {
     "build": "tsc",
@@ -33,12 +38,15 @@
     "server",
     "auth",
     "crud",
-    "controller"
+    "controller",
+    "realtime",
+    "iot"
   ],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "argon2": "^0.40.1",
+    "ioredis": "^15.15.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {
