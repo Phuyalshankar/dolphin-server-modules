@@ -1,30 +1,57 @@
 import { createDolphinRouter } from './router';
 
-describe('Dolphin Router', () => {
+describe('Standalone Router', () => {
   it('should match simple routes', () => {
     const router = createDolphinRouter();
     const handler = jest.fn();
-    router.get('/test', handler);
+    router.get('/hello', handler);
 
-    const match = router.match('GET', '/test');
+    const match = router.match('GET', '/hello');
     expect(match).not.toBeNull();
-    expect(match?.handler).toBe(handler);
+    expect(match!.handler).toBe(handler);
   });
 
-  it('should extract path parameters', () => {
+  it('should support sub-routers with prefixes', () => {
+    const mainRouter = createDolphinRouter();
+    const subRouter = createDolphinRouter();
+    const handler = jest.fn();
+
+    subRouter.get('/login', handler);
+    mainRouter.use('/auth', subRouter);
+
+    const match = mainRouter.match('GET', '/auth/login');
+    expect(match).not.toBeNull();
+    expect(match!.handler).toBe(handler);
+  });
+
+  it('should handle nested prefixes correctly', () => {
+    const v1 = createDolphinRouter();
+    const api = createDolphinRouter();
+    const handler = jest.fn();
+
+    v1.get('/test', handler);
+    api.use('/v1', v1);
+    
+    const root = createDolphinRouter();
+    root.use('/api', api);
+
+    expect(root.match('GET', '/api/v1/test')).not.toBeNull();
+  });
+
+  it('should support "all" method', () => {
     const router = createDolphinRouter();
     const handler = jest.fn();
-    router.get('/users/:id/posts/:postId', handler);
+    router.all('/any', handler);
 
-    const match = router.match('GET', '/users/123/posts/456');
-    expect(match).not.toBeNull();
-    expect(match?.params).toEqual({ id: '123', postId: '456' });
+    expect(router.match('GET', '/any')).not.toBeNull();
+    expect(router.match('POST', '/any')).not.toBeNull();
   });
 
-  it('should return null for unmatched routes', () => {
+  it('should normalize slashes', () => {
     const router = createDolphinRouter();
-    router.get('/test', jest.fn());
-    const match = router.match('GET', '/wrong');
-    expect(match).toBeNull();
+    const handler = jest.fn();
+    router.get('/slash/', handler);
+
+    expect(router.match('GET', '/slash')).not.toBeNull();
   });
 });

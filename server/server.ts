@@ -73,7 +73,13 @@ export function createDolphinServer(options: { port?: number; host?: string } = 
 
   return {
     ...router, // Mixin router methods (get, post, etc.)
-    use: (mw: any) => middlewares.push(mw),
+    use: (prefixOrMw: string | any, mw?: any) => {
+      if (typeof prefixOrMw === 'string' && mw && typeof mw.match === 'function') {
+        router.use(prefixOrMw, mw);
+      } else {
+        middlewares.push(prefixOrMw);
+      }
+    },
     listen: (port: number = options.port || 3000, callback?: () => void) => {
       server.listen(port, options.host || '0.0.0.0', callback);
     },

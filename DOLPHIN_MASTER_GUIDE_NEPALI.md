@@ -562,6 +562,33 @@ const rt = new RealtimeCore({
 
 ---
 
+## १५. इन्डिपेन्डेन्ट राउटिङ मास्टरक्लास (Independent Routing) [NEW]
+
+तपाईँको प्रोजेक्ट ठूलो हुँदै जाँदा एउटै फाइलमा सबै राउट्हरू राख्नु झन्झटिलो हुन्छ। त्यसैले Dolphin ले एक्सप्रेस जस्तै `Router` सपोर्ट गर्छ।
+
+### १५.१ किन प्रयोग गर्ने?
+- **Modular Code**: राउट्हरूलाई काम अनुसार (जस्तै: Users, Products, Auth) अलग फाइलमा राख्न।
+- **Prefixing**: एउटा पूरा राउट सेटलाई एउटा 'Prefix' (जस्तै: `/api/v1`) भित्र राख्न।
+- **Clean index.ts**: मुख्य फाइललाई सफा र छोटो राख्न।
+
+### १५.२ कोड उदाहरण
+```typescript
+// userRouters.ts
+import { createDolphinRouter } from 'dolphin-server-modules/router';
+export const userRouter = createDolphinRouter();
+
+userRouter.get('/profile', (ctx) => ctx.json({ name: "Ram" }));
+
+// main.ts
+import { createDolphinServer } from 'dolphin-server-modules/server';
+import { userRouter } from './userRouters';
+
+const app = createDolphinServer();
+app.use('/users', userRouter); // अब यो /users/profile मा चल्छ
+```
+
+---
+
 ## निष्कर्ष (Conclusion)
 
 बधाई छ! तपाईँले Dolphin Framework को **Master Guide** को अन्त्य सम्म पढ्नुभयो। अब तपाईँ कुनै पनि जटिल ब्याकइन्ड सिस्टम Dolphin प्रयोग गरेर बनाउन पूर्ण सक्षम हुनुहुन्छ।

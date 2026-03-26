@@ -1,6 +1,6 @@
-type Handler = (ctx: any) => Promise<void> | void;
+export type Handler = (ctx: any) => Promise<void> | void;
 
-interface Route {
+export interface Route {
   method: string;
   path: string;
   handler: Handler;
@@ -12,9 +12,11 @@ export function createDolphinRouter() {
   const routes: Route[] = [];
 
   const addRoute = (method: string, path: string, handler: Handler) => {
-    // Convert /users/:id to regex
+    // Normalize path to remove trailing slashes unless it's just /
+    const normalizedPath = path === '/' ? '/' : path.replace(/\/$/, '');
+    
     const keys: string[] = [];
-    const pattern = path
+    const pattern = normalizedPath
       .replace(/:([^\/]+)/g, (_, key) => {
         keys.push(key);
         return '([^\\/]+)';
@@ -23,19 +25,44 @@ export function createDolphinRouter() {
     
     routes.push({
       method: method.toUpperCase(),
-      path,
+      path: normalizedPath,
       handler,
       regex: new RegExp(`^${pattern}$`),
       keys
     });
   };
 
-  return {
+  const router = {
     get: (path: string, handler: Handler) => addRoute('GET', path, handler),
     post: (path: string, handler: Handler) => addRoute('POST', path, handler),
     put: (path: string, handler: Handler) => addRoute('PUT', path, handler),
     delete: (path: string, handler: Handler) => addRoute('DELETE', path, handler),
     patch: (path: string, handler: Handler) => addRoute('PATCH', path, handler),
+    all: (path: string, handler: Handler) => addRoute('ALL', path, handler),
+
+    /** 
+     * Mount a sub-router or middleware.
+     * app.use('/auth', authRouter)
+     */
+    use: (prefix: string, subRouter: any) => {
+      if (typeof prefix !== 'string') {
+        // Fallback for global middleware handling if needed
+        return;
+      }
+
+      const normalizedPrefix = prefix === '/' ? '' : prefix.replace(/\/$/, '');
+      
+      // If subRouter is another Dolphin router, merge its routes
+      if (subRouter && typeof subRouter.match === 'function' && subRouter._routes) {
+        for (const sr of subRouter._routes) {
+            const fullPath = normalizedPrefix + (sr.path === '/' ? '' : sr.path);
+            addRoute(sr.method, fullPath || '/', sr.handler);
+        }
+      }
+    },
+
+    // Internal getter for route merging
+    _routes: routes,
 
     match(method: string, url: string) {
       const path = url.split('?')[0];
@@ -56,4 +83,6 @@ export function createDolphinRouter() {
       return null;
     }
   };
+
+  return router;
 }

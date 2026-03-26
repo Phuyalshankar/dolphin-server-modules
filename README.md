@@ -115,19 +115,22 @@ Seamlessly switch between databases with the Adapter pattern.
 ### ✅ 5. Zod-Powered Validation (`/middleware/zod`)
 Validate payloads and params with 100% type inference.
 
-### 🌐 6. Realtime & IoT Core (`/realtime`) [NEW]
+### 🌐 6. Realtime & IoT Core (`/realtime`)
 High-performance pub/sub with MQTT-style matching.
-- **TopicTrie**: $O(1)$ pattern matching for `+` and `#`.
-- **Binary Codec**: Ultra-lightweight ingestion for IoT devices.
-- **Redis Scaling**: Seamlessly scale across multiple instances.
+
+### 🛣️ 7. Independent Routing (`/router`) [NEW]
+Express-style standalone routers for clean organization.
+- `app.use('/prefix', subRouter)`: Mount sub-modules with ease.
+- **Nested Routing**: Unlimited nesting with prefix inheritance.
+- **Unified Matcher**: Optimized matching for both static and dynamic routes.
 
 ---
 
 ## 🗺️ Roadmap & Future Vision
 1. **`defineModel` Engine**: Define a schema once, auto-generate CRUD, validation, and types.
-2. **Plugin System**: A robust "hook" based system for extending the framework core. [DONE]
-3. **CLI Presets**: `npx dolphin init` for instant project scaffolding.
-4. **Adaptive Load Balancing**: Native cluster support for multi-core CPUs.
+2. **Plugin System**: A robust "hook" based system. [DONE]
+3. **Independent Routing**: Standalone sub-routers for large apps. [DONE]
+4. **CLI Presets**: `npx dolphin init` for instant project scaffolding.
 
 ---
 
