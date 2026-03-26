@@ -200,7 +200,23 @@ rt.publish('sensors/temp', { value: 24.5 });
 
 ---
 
-## १२. अन्तिममा (Conclusion)
+## १२. इन्डिपेन्डेन्ट राउटिङ (Independent Routing) [NEW]
+ठूला एप्लिकेसनहरूलाई व्यवस्थित गर्न अलग-अलग फाइलमा राउट्हरू राख्न सकिन्छ:
+
+```typescript
+// routes.ts
+import { createDolphinRouter } from 'dolphin-server-modules/router';
+export const apiRouter = createDolphinRouter();
+apiRouter.get('/ping', (ctx) => ctx.json({ msg: 'pong' }));
+
+// index.ts
+import { apiRouter } from './routes';
+app.use('/api', apiRouter); // Route अब /api/ping मा उपलब्ध छ
+```
+
+---
+
+## १३. अन्तिममा (Conclusion)
 
 Dolphin Framework निकै छिटो र सजिलो छ। यसले तपाईँको ब्याकइन्ड डेभलपमेन्टको अनुभवलाई नयाँ उचाइमा पुर्‍याउँछ।
 

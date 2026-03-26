@@ -133,6 +133,23 @@ rt.publish('sensors/temp', { value: 24.5 });
 
 ---
 
+## 9. Independent Routing [NEW]
+Organize your application by separating routes into different files:
+
+```typescript
+// authRoutes.ts
+import { createDolphinRouter } from 'dolphin-server-modules/router';
+export const authRouter = createDolphinRouter();
+
+authRouter.get('/login', (ctx) => ctx.json({ msg: 'Logged in' }));
+
+// index.ts
+import { authRouter } from './authRoutes';
+app.use('/auth', authRouter); // Routes are now at /auth/login
+```
+
+---
+
 ## 🚀 Performance Tips
 - Use **Context (ctx)** directly for JSON responses.
 - Keep your routes organized using prefixing (coming in v1.1.0).
