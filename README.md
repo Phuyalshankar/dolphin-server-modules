@@ -9,6 +9,7 @@
 ### 📘 Official Master Guide (Nepal)
 Dolphin Framework को विस्तृत र आधिकारिक गाइड अब उपलब्ध छ। यसमा **Auth, CRUD, Models, र Controllers** को १००% ट्युटोरियल समावेश छ।
 
+👉 **[Dolphin Master Guide (Markdown)](https://github.com/Phuyalshankar/dolphin-server-modules/blob/main/DOLPHIN_MASTER_GUIDE_NEPALI.md)** *(Most Up-to-Date)*
 👉 **[Dolphin Master Guide (PDF)](https://github.com/Phuyalshankar/dolphin-server-modules/blob/main/DOLPHIN_MASTER_GUIDE_NEPALI.pdf)**
 
 ---
@@ -116,13 +117,29 @@ Seamlessly switch between databases with the Adapter pattern.
 Validate payloads and params with 100% type inference.
 
 ### 🌐 6. Realtime & IoT Core (`/realtime`)
-High-performance pub/sub with MQTT-style matching.
+High-performance pub/sub with MQTT-style matching and binary codecs.
+```typescript
+import { RealtimeCore } from 'dolphin-server-modules/realtime';
+const rt = new RealtimeCore();
+
+rt.subscribe('sensors/+', (ctx) => {
+  console.log(`Topic: ${ctx.topic}, Data:`, ctx.payload);
+});
+
+rt.publish('sensors/temp', { value: 24.5 });
+```
 
 ### 🛣️ 7. Independent Routing (`/router`) [NEW]
 Express-style standalone routers for clean organization.
-- `app.use('/prefix', subRouter)`: Mount sub-modules with ease.
-- **Nested Routing**: Unlimited nesting with prefix inheritance.
-- **Unified Matcher**: Optimized matching for both static and dynamic routes.
+```typescript
+// authRoutes.ts
+import { createDolphinRouter } from 'dolphin-server-modules/router';
+export const authRouter = createDolphinRouter();
+authRouter.get('/login', (ctx) => ctx.json({ status: 'ok' }));
+
+// main.ts
+app.use('/auth', authRouter); // Accessible at /auth/login
+```
 
 ---
 
