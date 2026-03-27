@@ -6,11 +6,28 @@ export function createDolphinServer(options: { port?: number; host?: string } = 
   const middlewares: any[] = [];
 
   const server = http.createServer(async (req: any, res: any) => {
-    // Utility for JSON responses
-    res.json = (data: any, status = 200) => {
-      res.writeHead(status, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(data));
+    // Store status for chaining
+    let pendingStatus: number = 200;
+
+    // Helper to send response
+    const send = (data: any, contentType: string, status?: number) => {
+      if (res.headersSent) return;
+      const finalStatus = status !== undefined ? status : pendingStatus;
+      res.statusCode = finalStatus;
+      res.setHeader('Content-Type', contentType);
+      
+      if (contentType === 'application/json') {
+        res.end(JSON.stringify(data));
+      } else {
+        res.end(String(data));
+      }
+      pendingStatus = 200; // Reset after send
     };
+
+    // Add response helpers
+    res.json = (data: any, status?: number) => send(data, 'application/json', status);
+    res.text = (data: any, status?: number) => send(data, 'text/plain', status);
+    res.html = (data: any, status?: number) => send(data, 'text/html', status);
 
     const host = req.headers.host || 'localhost';
     const parsedUrl = new URL(req.url!, `http://${host}`);
@@ -22,10 +39,34 @@ export function createDolphinServer(options: { port?: number; host?: string } = 
       query: Object.fromEntries(parsedUrl.searchParams),
       body: {},
       state: {},
-      json: res.json,
-      status: (code: number) => {
-        res.statusCode = code;
+      
+      json: (data: any, status?: number) => {
+        send(data, 'application/json', status);
         return ctx;
+      },
+      
+      text: (data: any, status?: number) => {
+        send(data, 'text/plain', status);
+        return ctx;
+      },
+      
+      html: (data: any, status?: number) => {
+        send(data, 'text/html', status);
+        return ctx;
+      },
+      
+      status: (code: number) => {
+        pendingStatus = code;
+        return ctx;
+      },
+      
+      setHeader: (name: string, value: string) => {
+        res.setHeader(name, value);
+        return ctx;
+      },
+      
+      getHeader: (name: string) => {
+        return req.headers[name.toLowerCase()];
       }
     };
 
@@ -34,24 +75,31 @@ export function createDolphinServer(options: { port?: number; host?: string } = 
       if (res.writableEnded) return;
       await new Promise(resolve => {
         if (mw.length === 3) {
-          mw(req, res, resolve); // Native Express signature
+          mw(req, res, resolve);
         } else {
-          mw(ctx, resolve); // Dolphin Context signature
+          mw(ctx, resolve);
         }
       });
     }
 
     // Body parsing for POST/PUT/PATCH
-    if (['POST', 'PUT', 'PATCH'].includes(req.method!) && req.headers['content-type']?.includes('application/json')) {
+    if (['POST', 'PUT', 'PATCH'].includes(req.method!)) {
       const chunks: any[] = [];
       for await (const chunk of req) chunks.push(chunk);
-      try {
-        const parsed = JSON.parse(Buffer.concat(chunks).toString());
-        ctx.body = parsed;
-        req.body = parsed; // Standard Express compatibility
-      } catch {
-        ctx.body = {};
-        req.body = {};
+      const rawBody = Buffer.concat(chunks).toString();
+      
+      if (req.headers['content-type']?.includes('application/json')) {
+        try {
+          const parsed = JSON.parse(rawBody);
+          ctx.body = parsed;
+          req.body = parsed;
+        } catch {
+          ctx.body = {};
+          req.body = {};
+        }
+      } else {
+        ctx.body = rawBody;
+        req.body = rawBody;
       }
     }
 
@@ -59,20 +107,28 @@ export function createDolphinServer(options: { port?: number; host?: string } = 
     const match = router.match(req.method!, parsedUrl.pathname);
     if (match) {
       ctx.params = match.params;
-      req.params = match.params; // Standard Express compatibility
+      req.params = match.params;
       try {
         await match.handler(ctx);
+        // If no response sent, send 204
+        if (!res.headersSent) {
+          send(null, 'application/json', 204);
+        }
       } catch (err: any) {
         console.error('Server Handler Error:', err);
-        ctx.json({ error: err.message || 'Internal Server Error' }, err.status || 500);
+        if (!res.headersSent) {
+          send({ error: err.message || 'Internal Server Error' }, 'application/json', err.status || 500);
+        }
       }
     } else {
-      ctx.json({ error: 'Not Found' }, 404);
+      if (!res.headersSent) {
+        send({ error: 'Not Found' }, 'application/json', 404);
+      }
     }
   });
 
   return {
-    ...router, // Mixin router methods (get, post, etc.)
+    ...router,
     use: (prefixOrMw: string | any, mw?: any) => {
       if (typeof prefixOrMw === 'string' && mw && typeof mw.match === 'function') {
         router.use(prefixOrMw, mw);
