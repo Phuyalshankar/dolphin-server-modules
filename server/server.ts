@@ -83,23 +83,35 @@ export function createDolphinServer(options: { port?: number; host?: string } = 
     }
 
     // Body parsing for POST/PUT/PATCH
+    const contentType = req.headers['content-type'] || '';
     if (['POST', 'PUT', 'PATCH'].includes(req.method!)) {
-      const chunks: any[] = [];
-      for await (const chunk of req) chunks.push(chunk);
-      const rawBody = Buffer.concat(chunks).toString();
-      
-      if (req.headers['content-type']?.includes('application/json')) {
-        try {
-          const parsed = JSON.parse(rawBody);
+      if (contentType.includes('multipart/form-data')) {
+        // Handled by third-party middlewares like multer. Just sync to ctx.
+        if ((req as any).body) ctx.body = (req as any).body;
+        if ((req as any).file) ctx.file = (req as any).file;
+        if ((req as any).files) ctx.files = (req as any).files;
+      } else {
+        const chunks: any[] = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const rawBody = Buffer.concat(chunks).toString();
+        
+        if (contentType.includes('application/json')) {
+          try {
+            const parsed = JSON.parse(rawBody);
+            ctx.body = parsed;
+            req.body = parsed;
+          } catch {
+            ctx.body = {};
+            req.body = {};
+          }
+        } else if (contentType.includes('application/x-www-form-urlencoded')) {
+          const parsed = Object.fromEntries(new URLSearchParams(rawBody));
           ctx.body = parsed;
           req.body = parsed;
-        } catch {
-          ctx.body = {};
-          req.body = {};
+        } else {
+          ctx.body = rawBody;
+          req.body = rawBody;
         }
-      } else {
-        ctx.body = rawBody;
-        req.body = rawBody;
       }
     }
 
