@@ -72,6 +72,7 @@ rt.subscribe('factory/machine/+', (data) => {
 | **Auth** | `/auth` | Argon2/JWT based secure auth with 2FA support. |
 | **Realtime** | `/realtime` | Pub/Sub engine with `TopicTrie` & Binary Codecs. |
 | **Validation** | `/middleware/zod` | Type-safe validation for Express, Next.js, and Dolphin. |
+| **Swagger Docs** | `/swagger` | Auto-generated OpenAPI docs from Zod schemas (UI included). |
 | **IoT Plugins** | `/realtime/plugins` | Native parsers for HL7, Modbus, and DICOM. |
 | **DB Adapters** | `/adapters` | Mongoose and SQL adapters for rapid CRUD. |
 
@@ -105,8 +106,8 @@ mainApp.use('/api/v1', apiV1); // Accessible at /api/v1/status
 ## 🗺️ Roadmap
 - [x] Universal Plugin System (HL7/Modbus/Binary)
 - [x] Recursive Sub-routing
+- [x] **Auto-Doc**: Automatic Swagger/OpenAPI generation from Zod schemas.
 - [ ] **Dolphin CLI**: `npx dolphin init` for automated scaffolding.
-- [ ] **Auto-Doc**: Automatic Swagger/OpenAPI generation from Zod schemas.
 
 ---
 

@@ -26,7 +26,8 @@
     "./realtime/core": "./dist/realtime/core.js",
     "./realtime/trie": "./dist/realtime/trie.js",
     "./realtime/codec": "./dist/realtime/codec.js",
-    "./realtime/plugins": "./dist/realtime/plugins.js"
+    "./realtime/plugins": "./dist/realtime/plugins.js",
+    "./swagger": "./dist/swagger/swagger.js"
   },
   "scripts": {
     "build": "tsc",
