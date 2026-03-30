@@ -4,13 +4,27 @@ export interface MongooseAdapterConfig {
   User: Model<any>;
   RefreshToken: Model<any>;
   models?: Record<string, Model<any>>;
+  leanByDefault?: boolean;     // Fast reads
+  maxLimit?: number;           // Safety
+  softDelete?: boolean;        // Soft delete support
+  softDeleteField?: string;    // Default: 'deletedAt'
 }
 
 export function createMongooseAdapter(config: MongooseAdapterConfig) {
-  // Map MongoDB document to the standard BaseDocument shape
+  const {
+    User,
+    RefreshToken,
+    models = {},
+    leanByDefault = true,
+    maxLimit = 100,
+    softDelete = false,
+    softDeleteField = 'deletedAt'
+  } = config;
+
+  // Fast document mapper
   const mapDoc = (doc: any) => {
     if (!doc) return null;
-    const obj = doc.toObject && typeof doc.toObject === 'function' ? doc.toObject() : { ...doc };
+    const obj = doc.toObject?.() ?? { ...doc };
     if (obj._id) {
       obj.id = obj._id.toString();
       delete obj._id;
@@ -19,34 +33,36 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
     return obj;
   };
 
-  // Convert standard QueryFilter to Mongoose Query format
-  const mapQuery = (query: any) => {
-    if (!query) return {};
-    const parsed: any = {};
-    for (const [key, val] of Object.entries(query)) {
-      if (key === 'id') {
-        parsed['_id'] = val;
-      } else if (key === '$and' || key === '$or') {
-        parsed[key] = (val as any[]).map(mapQuery);
-      } else if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-        const ops: any = {};
-        for (const [op, opVal] of Object.entries(val)) {
-          if (op === '$like') {
-            ops['$regex'] = opVal;
-            ops['$options'] = 'i';
-          } else {
-            ops[op] = opVal;
-          }
-        }
-        parsed[key] = ops;
-      } else {
-        parsed[key] = val;
+  // Fast query mapper
+  const mapQuery = (query: any = {}) => {
+    if (!query || typeof query !== 'object') return {};
+
+    const parsed: any = { ...query };
+
+    if (parsed.id) {
+      parsed._id = parsed.id;
+      delete parsed.id;
+    }
+
+    // Handle $like
+    for (const key in parsed) {
+      if (parsed[key] && typeof parsed[key] === 'object' && parsed[key].$like) {
+        parsed[key] = { $regex: parsed[key].$like, $options: 'i' };
       }
     }
+
+    // Handle $and / $or recursively
+    if (parsed.$and) parsed.$and = parsed.$and.map(mapQuery);
+    if (parsed.$or) parsed.$or = parsed.$or.map(mapQuery);
+
+    // Auto exclude soft deleted
+    if (softDelete && parsed[softDeleteField] === undefined) {
+      parsed[softDeleteField] = null;
+    }
+
     return parsed;
   };
 
-  // Convert standard sorting to Mongoose sort format
   const mapSort = (sort?: Record<string, 'asc' | 'desc'>) => {
     if (!sort) return undefined;
     const result: Record<string, 1 | -1> = {};
@@ -56,104 +72,240 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
     return result;
   };
 
-  // Helper to fetch generic CRUD models
   const getModel = (collection: string): Model<any> => {
-    if (!config.models || !config.models[collection]) {
-      throw new Error(`Model for collection '${collection}' not found in MongooseAdapterConfig`);
-    }
-    return config.models[collection];
+    if (collection === 'User') return User;
+    if (collection === 'RefreshToken') return RefreshToken;
+    if (models[collection]) return models[collection];
+    throw new Error(`Model '${collection}' not found`);
   };
 
   const adapter = {
-    // ==========================================
-    // AUTHENTICATION ADAPTER METHODS
-    // ==========================================
+    // ==================== AUTH METHODS ====================
     async createUser(data: any) {
-      const user = await config.User.create(data);
+      const user = await User.create(data);
       return mapDoc(user);
-    },
-    async findUserByEmail(email: string) {
-      const user = await config.User.findOne({ email });
-      return mapDoc(user);
-    },
-    async findUserById(id: string) {
-      const user = await config.User.findById(id);
-      return mapDoc(user);
-    },
-    async updateUser(id: string, data: any) {
-      const user = await config.User.findByIdAndUpdate(id, data, { new: true });
-      return mapDoc(user);
-    },
-    async saveRefreshToken(data: any) {
-      await config.RefreshToken.create(data);
-    },
-    async findRefreshToken(token: string) {
-      const rt = await config.RefreshToken.findOne({ token });
-      return mapDoc(rt);
-    },
-    async deleteRefreshToken(token: string) {
-      await config.RefreshToken.deleteOne({ token });
     },
 
-    // ==========================================
-    // CRUD ADAPTER METHODS
-    // ==========================================
-    async create(collection: string, data: any) {
+    async findUserByEmail(email: string) {
+      const user = await User.findOne({ email }).lean(leanByDefault);
+      return mapDoc(user);
+    },
+
+    async findUserById(id: string) {
+      const user = await User.findById(id).lean(leanByDefault);
+      return mapDoc(user);
+    },
+
+    async updateUser(id: string, data: any) {
+      const user = await User.findByIdAndUpdate(id, data, { new: true }).lean(leanByDefault);
+      return mapDoc(user);
+    },
+
+    async saveRefreshToken(data: any) {
+      await RefreshToken.create(data);
+    },
+
+    async findRefreshToken(token: string) {
+      const rt = await RefreshToken.findOne({ token }).lean(leanByDefault);
+      return mapDoc(rt);
+    },
+
+    async deleteRefreshToken(token: string) {
+      await RefreshToken.deleteOne({ token });
+    },
+
+    // ==================== CRUD METHODS ====================
+    
+    // Create
+    async create(collection: string, data: any, userId?: string) {
       const Model = getModel(collection);
-      const doc = await Model.create(data);
+      const docData = { ...data };
+      if (userId) docData.userId = userId;
+      const doc = await Model.create(docData);
       return mapDoc(doc);
     },
-    async read(collection: string, query: any) {
+
+    // Read one
+    async readOne(collection: string, id: string, userId?: string) {
       const Model = getModel(collection);
-      const docs = await Model.find(mapQuery(query));
-      return docs.map(mapDoc);
-    },
-    async update(collection: string, query: any, data: any) {
-      const Model = getModel(collection);
-      await Model.updateMany(mapQuery(query), data);
+      const query: any = { _id: id };
+      if (userId) query.userId = userId;
+      if (softDelete) query[softDeleteField] = null;
       
-      // Return updated documents if we can map them back, otherwise minimal info
-      // Since updateMany doesn't return the updated docs in mongoose, we can just return a generic success object 
-      // or fetch them. The interface expects Promise<any>. We will fetch them to match typical behavior.
-      const docs = await Model.find(mapQuery({ ...query, ...data }));
+      const doc = await Model.findOne(query).lean(leanByDefault);
+      return mapDoc(doc);
+    },
+
+    // Read many
+    async read(collection: string, query: any = {}, options: any = {}, userId?: string) {
+      const Model = getModel(collection);
+      const filter = mapQuery(query);
+      if (userId) filter.userId = userId;
+      
+      let queryBuilder = Model.find(filter).lean(leanByDefault);
+      
+      if (options.sort) queryBuilder = queryBuilder.sort(mapSort(options.sort));
+      if (options.select) queryBuilder = queryBuilder.select(options.select);
+      if (options.offset) queryBuilder = queryBuilder.skip(options.offset);
+      
+      const limit = options.limit ? Math.min(options.limit, maxLimit) : undefined;
+      if (limit) queryBuilder = queryBuilder.limit(limit);
+      
+      const docs = await queryBuilder;
       return docs.map(mapDoc);
     },
-    async delete(collection: string, query: any) {
+
+    // Update one
+    async updateOne(collection: string, id: string, data: any, userId?: string) {
       const Model = getModel(collection);
-      await Model.deleteMany(mapQuery(query));
-      return { deleted: true };
+      const query: any = { _id: id };
+      if (userId) query.userId = userId;
+      if (softDelete) query[softDeleteField] = null;
+      
+      const doc = await Model.findOneAndUpdate(
+        query,
+        { ...data, updatedAt: new Date() },
+        { new: true }
+      ).lean(leanByDefault);
+      
+      return mapDoc(doc);
     },
-    async advancedRead(collection: string, query: any, options: any) {
+
+    // Update many
+    async updateMany(collection: string, query: any, data: any, userId?: string) {
+      const Model = getModel(collection);
+      const filter = mapQuery(query);
+      if (userId) filter.userId = userId;
+      
+      const result = await Model.updateMany(
+        filter,
+        { ...data, updatedAt: new Date() }
+      );
+      
+      return result.modifiedCount;
+    },
+
+    // Delete one
+    async deleteOne(collection: string, id: string, userId?: string) {
+      const Model = getModel(collection);
+      const query: any = { _id: id };
+      if (userId) query.userId = userId;
+      
+      if (softDelete) {
+        const doc = await Model.findOneAndUpdate(
+          query,
+          { [softDeleteField]: new Date(), updatedAt: new Date() },
+          { new: true }
+        ).lean(leanByDefault);
+        return mapDoc(doc);
+      } else {
+        const doc = await Model.findOneAndDelete(query).lean(leanByDefault);
+        return mapDoc(doc);
+      }
+    },
+
+    // Delete many
+    async deleteMany(collection: string, query: any, userId?: string) {
+      const Model = getModel(collection);
+      const filter = mapQuery(query);
+      if (userId) filter.userId = userId;
+      
+      if (softDelete) {
+        const result = await Model.updateMany(
+          filter,
+          { [softDeleteField]: new Date(), updatedAt: new Date() }
+        );
+        return result.modifiedCount;
+      } else {
+        const result = await Model.deleteMany(filter);
+        return result.deletedCount;
+      }
+    },
+
+    // Restore (soft delete only)
+    async restore(collection: string, id: string, userId?: string) {
+      if (!softDelete) throw new Error('Soft delete not enabled');
+      
+      const Model = getModel(collection);
+      const query: any = { _id: id, [softDeleteField]: { $ne: null } };
+      if (userId) query.userId = userId;
+      
+      const doc = await Model.findOneAndUpdate(
+        query,
+        { [softDeleteField]: null, updatedAt: new Date() },
+        { new: true }
+      ).lean(leanByDefault);
+      
+      return mapDoc(doc);
+    },
+
+    // Pagination
+    async paginate(collection: string, filter: any = {}, page: number = 1, limit: number = 20, userId?: string) {
+      const Model = getModel(collection);
+      const query = mapQuery(filter);
+      if (userId) query.userId = userId;
+      
+      const safeLimit = Math.min(limit, maxLimit);
+      const skip = (page - 1) * safeLimit;
+      
+      const [items, total] = await Promise.all([
+        Model.find(query).skip(skip).limit(safeLimit).lean(leanByDefault),
+        Model.countDocuments(query)
+      ]);
+      
+      return {
+        items: items.map(mapDoc),
+        total,
+        page,
+        limit: safeLimit,
+        totalPages: Math.ceil(total / safeLimit),
+        hasNext: page * safeLimit < total,
+        hasPrev: page > 1
+      };
+    },
+
+    // Advanced read with full options
+    async advancedRead(collection: string, query: any = {}, options: any = {}, userId?: string) {
       const Model = getModel(collection);
       let mQuery = Model.find(mapQuery(query));
-      if (options.sort) {
-        mQuery = mQuery.sort(mapSort(options.sort));
-      }
-      if (options.offset !== undefined) {
-        mQuery = mQuery.skip(options.offset);
-      }
-      if (options.limit !== undefined) {
-        mQuery = mQuery.limit(options.limit);
-      }
-      const docs = await mQuery;
+      
+      if (userId) mQuery = mQuery.where('userId', userId);
+      if (options.sort) mQuery = mQuery.sort(mapSort(options.sort));
+      if (options.select) mQuery = mQuery.select(options.select);
+      if (options.populate) mQuery = mQuery.populate(options.populate);
+      if (options.offset !== undefined) mQuery = mQuery.skip(options.offset);
+      
+      const limit = options.limit ? Math.min(options.limit, maxLimit) : undefined;
+      if (limit) mQuery = mQuery.limit(limit);
+      
+      const docs = await mQuery.lean(leanByDefault);
       return docs.map(mapDoc);
+    },
+
+    // Count
+    async count(collection: string, filter: any = {}, userId?: string) {
+      const Model = getModel(collection);
+      const query = mapQuery(filter);
+      if (userId) query.userId = userId;
+      return await Model.countDocuments(query);
+    },
+
+    // Exists
+    async exists(collection: string, filter: any = {}, userId?: string) {
+      const count = await this.count(collection, filter, userId);
+      return count > 0;
     }
   };
 
-  // ✅ NEW: Attach model metadata for createCrudController(db.ModelName) support
+  // Attach model shortcuts
   if (config.models) {
     Object.keys(config.models).forEach((key) => {
       (adapter as any)[key] = { adapter, collection: key };
     });
   }
 
-  // Also attach standard User/RefreshToken if they are not in models but passed in config
-  if (config.User && (!config.models || !config.models['User'])) {
-    (adapter as any)['User'] = { adapter, collection: 'User' };
-  }
-  if (config.RefreshToken && (!config.models || !config.models['RefreshToken'])) {
-    (adapter as any)['RefreshToken'] = { adapter, collection: 'RefreshToken' };
-  }
+  (adapter as any).User = { adapter, collection: 'User' };
+  (adapter as any).RefreshToken = { adapter, collection: 'RefreshToken' };
 
   return adapter;
 }
