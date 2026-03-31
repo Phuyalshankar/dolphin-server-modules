@@ -1,12 +1,10 @@
 // dolphin-server-modules/auth-controller.ts
-import { createAuth, DatabaseAdapter } from "../auth/auth.ts";
+import { createAuth, DatabaseAdapter } from "../auth/auth";
 import crypto from 'node:crypto';
 
-// No complex interface extensions - use type assertion
 export const createDolphinAuthController = (db: any, authConfig: any) => {
   const authCore = createAuth(authConfig);
 
-  // Helper: Verify password
   const verifyPassword = async (password: string, hash: string) => {
     try {
       const argon2 = await import('argon2');
@@ -16,7 +14,6 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
     }
   };
 
-  // Helper: Hash password
   const hashPassword = async (password: string) => {
     const argon2 = await import('argon2');
     return await argon2.hash(password, { 
@@ -26,15 +23,15 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
     });
   };
 
-  // Generate reset token
   const generateResetToken = () => crypto.randomBytes(32).toString('hex');
 
   return {
     // ============ AUTH HANDLERS ============
     
+    // ✅ FIXED: Use ctx.body (same as controller)
     register: async (ctx: any) => {
       try {
-        const body = await ctx.req.json();
+        const body = ctx.body;  // ← consistent with controller
         const user = await authCore.register(db, body);
         return { success: true, data: user };
       } catch (err: any) {
@@ -42,9 +39,10 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
       }
     },
 
+    // ✅ FIXED: Use ctx.body
     login: async (ctx: any) => {
       try {
-        const body = await ctx.req.json();
+        const body = ctx.body;  // ← consistent with controller
         const result = await authCore.login(db, body, ctx.res);
         return { success: true, ...result };
       } catch (err: any) {
@@ -86,12 +84,13 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
 
     // ============ CHANGE PASSWORD ============
     
+    // ✅ FIXED: Use ctx.body
     changePassword: async (ctx: any) => {
       try {
         const userId = ctx.req.user?.id;
         if (!userId) throw new Error('Unauthorized');
 
-        const { oldPassword, newPassword } = await ctx.req.json();
+        const { oldPassword, newPassword } = ctx.body;  // ← consistent
         if (!oldPassword || !newPassword) throw new Error('Old and new password required');
         if (newPassword.length < 8) throw new Error('Password must be at least 8 characters');
 
@@ -112,9 +111,10 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
 
     // ============ FORGOT PASSWORD ============
     
+    // ✅ FIXED: Use ctx.body
     forgotPassword: async (ctx: any) => {
       try {
-        const { email } = await ctx.req.json();
+        const { email } = ctx.body;  // ← consistent
         if (!email) throw new Error('Email required');
 
         const user = await db.findUserByEmail(email);
@@ -144,13 +144,13 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
 
     // ============ RESET PASSWORD ============
     
+    // ✅ FIXED: Use ctx.body
     resetPassword: async (ctx: any) => {
       try {
-        const { token, newPassword } = await ctx.req.json();
+        const { token, newPassword } = ctx.body;  // ← consistent
         if (!token || !newPassword) throw new Error('Token and password required');
         if (newPassword.length < 8) throw new Error('Password must be at least 8 characters');
 
-        // Find user by reset token (using db.read if available, otherwise try direct)
         let user = null;
         if (db.read) {
           const users = await db.read('User', { resetPasswordToken: token });
@@ -180,9 +180,10 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
 
     // ============ RESEND RESET LINK ============
     
+    // ✅ FIXED: Use ctx.body
     resendResetLink: async (ctx: any) => {
       try {
-        const { email } = await ctx.req.json();
+        const { email } = ctx.body;  // ← consistent
         if (!email) throw new Error('Email required');
 
         const user = await db.findUserByEmail(email);
@@ -221,9 +222,10 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
       }
     },
 
+    // ✅ FIXED: Use ctx.body
     verify2FA: async (ctx: any) => {
       try {
-        const { totp } = await ctx.req.json();
+        const { totp } = ctx.body;  // ← consistent
         const result = await authCore.verify2FA(db, ctx.req.user.id, totp);
         return { success: true, ...result };
       } catch (err: any) {
@@ -231,9 +233,10 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
       }
     },
 
+    // ✅ FIXED: Use ctx.body
     disable2FA: async (ctx: any) => {
       try {
-        const { totp } = await ctx.req.json();
+        const { totp } = ctx.body;  // ← consistent
         await authCore.disable2FA(db, ctx.req.user.id, totp);
         return { success: true };
       } catch (err: any) {

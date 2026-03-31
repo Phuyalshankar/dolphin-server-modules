@@ -1,4 +1,4 @@
-# 🐬 Dolphin Framework (v1.3.1)
+# 🐬 Dolphin Framework (v1.1.4.1)
 
 **Dolphin** is a 2026-ready, ultra-lightweight, and 100% modular backend ecosystem built on native Node.js. It’s not just a framework; it’s a universal toolkit for Web, Microservices, and Industrial IoT.
 

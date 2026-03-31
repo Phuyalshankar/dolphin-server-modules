@@ -478,10 +478,23 @@ export function createAuth(config: {
       };
     },
     
+    // ✅ FIXED: Enable 2FA with pending secret check
     async enable2FA(db: DatabaseAdapter, userId: string) {
       const user = await db.findUserById(userId);
       if (!user) throw new AuthError('User not found', 404);
       if (user.twoFactorEnabled) throw new AuthError('2FA already enabled', 400);
+      
+      // ✅ Return existing pending secret if available
+      if (user.pending2FASecret) {
+        const existingSecret = decrypt(user.pending2FASecret);
+        if (existingSecret) {
+          const base32 = base32Encode(Buffer.from(existingSecret, 'hex'));
+          return { 
+            secret: base32, 
+            uri: `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(user.email)}?secret=${base32}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30` 
+          };
+        }
+      }
       
       const { hex, base32 } = generateTOTPSecret();
       await db.updateUser(userId, { pending2FASecret: encrypt(hex) });
@@ -522,38 +535,29 @@ export function createAuth(config: {
     async refresh(db: DatabaseAdapter, refreshToken: string, res?: { cookie: (name: string, value: string, options: any) => void }) {
       if (!refreshToken) throw new AuthError('No refresh token provided', 401);
       
-      // 🔒 CRITICAL: Get token hash for locking
       const tokenHash = hashToken(refreshToken);
       const lockKey = `lock:${tokenHash}`;
       
-      // Try to acquire lock - this is the atomic operation
       if (lockStore?.has(lockKey)) {
         throw new AuthError('Token reuse detected', 401);
       }
       
-      // Set lock immediately
       lockStore?.set(lockKey, true);
       
       try {
-        // Now check if token exists and is valid
         const tokenData = await db.findRefreshToken(refreshToken);
         if (!tokenData || new Date() > tokenData.expiresAt) {
           throw new AuthError('Invalid or expired refresh token', 401);
         }
         
-        // Check if token was already used
         await checkReuse(refreshToken);
         
         const user = await db.findUserById(tokenData.userId);
         if (!user) throw new AuthError('User not found', 404);
         
-        // Delete old token (atomic)
         await db.deleteRefreshToken(refreshToken);
-        
-        // Mark as used to prevent replay
         await markUsed(refreshToken);
         
-        // Generate new tokens
         const newRT = crypto.randomBytes(40).toString('hex');
         
         await db.saveRefreshToken({
@@ -589,7 +593,6 @@ export function createAuth(config: {
           } 
         };
       } finally {
-        // Release lock after operation completes
         setTimeout(() => {
           lockStore?.delete(lockKey);
         }, 100);
@@ -651,34 +654,61 @@ export function createAuth(config: {
       return { recoveryCodes: codes };
     },
     
+    // ✅ FIXED: Dolphin Server compatible middleware
     middleware(opts: { require2FA?: boolean } = {}) {
-      return async (req: any, res: any, next: Function) => {
-        try {
-          const authHeader = req.headers.authorization;
-          if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ message: 'Unauthorized' });
-          }
-
-          const token = authHeader.substring(7);
-          let decoded;
-          
-          try {
-            decoded = await verifyJWT(token, config.secret);
-            req.user = decoded;
-          } catch (jwtErr) {
-            return res.status(401).json({ message: 'Unauthorized' });
-          }
-
-          if (opts.require2FA && decoded.twoFactorVerified !== true) {
-            return res.status(403).json({ message: '2FA required' });
-          }
-
-          next();
-        } catch (err) {
-          res.status(401).json({ message: 'Unauthorized' });
+  return async (req: any, res: any, next: Function) => {
+    try {
+      // ✅ Safe headers access
+      const headers = req?.headers || req?.req?.headers || {};
+      const authHeader = headers?.authorization;
+      
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        if (res && typeof res.status === 'function') {
+          return res.status(401).json({ message: 'Unauthorized' });
         }
-      };
-    },
+        const err: any = new Error('Unauthorized');
+        err.status = 401;
+        throw err;
+      }
+
+      const token = authHeader.substring(7);
+      let decoded;
+      
+      try {
+        decoded = await verifyJWT(token, config.secret);
+        req.user = decoded;
+      } catch (jwtErr) {
+        if (res && typeof res.status === 'function') {
+          return res.status(401).json({ message: 'Unauthorized' });
+        }
+        const err: any = new Error('Unauthorized');
+        err.status = 401;
+        throw err;
+      }
+
+      if (opts.require2FA && decoded.twoFactorVerified !== true) {
+        if (res && typeof res.status === 'function') {
+          return res.status(403).json({ message: '2FA required' });
+        }
+        const err: any = new Error('2FA required');
+        err.status = 403;
+        throw err;
+      }
+
+      // ✅ Fixed: Check if next exists and is a function
+      if (next && typeof next === 'function') {
+        next();
+      }
+      // For Dolphin Server, if next is not a function, just return
+      
+    } catch (err: any) {
+      if (res && typeof res.status === 'function') {
+        return res.status(err.status || 401).json({ message: err.message });
+      }
+      throw err;
+    }
+  };
+},
     
     verifyToken: (token: string) => verifyJWT(token, config.secret)
   };

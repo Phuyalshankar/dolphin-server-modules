@@ -14,6 +14,7 @@
   },
   "include": [
     "auth/**/*",
+      "authController/**/*",          
     "controller/**/*",
     "curd/**/*",
     "middleware/**/*",
