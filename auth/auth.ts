@@ -656,7 +656,7 @@ export function createAuth(config: {
     
     // ✅ FIXED: Dolphin Server compatible middleware
     middleware(opts: { require2FA?: boolean } = {}) {
-  return async (req: any, res: any, next: Function) => {
+  return async (req: any, res: any, next?: Function) => {
     try {
       // ✅ Safe headers access
       const headers = req?.headers || req?.req?.headers || {};

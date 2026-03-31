@@ -121,10 +121,38 @@ export function createDolphinServer(options: { port?: number; host?: string } = 
       ctx.params = match.params;
       req.params = match.params;
       try {
-        await match.handler(ctx);
-        // If no response sent, send 204
+        let result: any;
+        const handlers = match.handlers;
+        
+        for (let i = 0; i < handlers.length; i++) {
+          if (res.headersSent || res.writableEnded) break;
+          
+          const handler = handlers[i];
+          await new Promise<void>(async (resolve, reject) => {
+            try {
+              // If it's a middleware (takes ctx and next)
+              if (handler.length >= 2) {
+                result = await handler(ctx, resolve);
+              } else {
+                // If it's a regular handler
+                result = await handler(ctx);
+                resolve();
+              }
+            } catch (err) {
+              reject(err);
+            }
+          });
+        }
+
+        // If no response sent, send the last handler result or 204
         if (!res.headersSent) {
-          send(null, 'application/json', 204);
+          if (result !== undefined && result !== null) {
+            // Apply status from result if present, otherwise use pendingStatus
+            const status = result.status || pendingStatus;
+            send(result, 'application/json', status);
+          } else {
+            send(null, 'application/json', 204);
+          }
         }
       } catch (err: any) {
         console.error('Server Handler Error:', err);

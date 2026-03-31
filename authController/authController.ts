@@ -187,20 +187,20 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
 
   // ======= MIDDLEWARE =======
   const middleware = {
-    requireAuth: async (ctx: any, next: Function) => {
+    requireAuth: async (ctx: any, next?: Function) => {
       await authCore.middleware()(ctx.req, ctx.res, next);
     },
-    require2FA: async (ctx: any, next: Function) => {
+    require2FA: async (ctx: any, next?: Function) => {
       await authCore.middleware({ require2FA: true })(ctx.req, ctx.res, next);
     },
-    requireAdmin: async (ctx: any, next: Function) => {
+    requireAdmin: async (ctx: any, next?: Function) => {
       await authCore.middleware()(ctx.req, ctx.res, async () => {
         if (ctx.req.user?.role !== 'admin') {
           ctx.res.statusCode = 403;
           ctx.res.end(JSON.stringify({ error: 'Admin access required' }));
           return;
         }
-        await next();
+        if (next) await next();
       });
     }
   };

@@ -8,7 +8,7 @@ describe('Standalone Router', () => {
 
     const match = router.match('GET', '/hello');
     expect(match).not.toBeNull();
-    expect(match!.handler).toBe(handler);
+    expect(match!.handlers[0]).toBe(handler);
   });
 
   it('should support sub-routers with prefixes', () => {
@@ -21,7 +21,7 @@ describe('Standalone Router', () => {
 
     const match = mainRouter.match('GET', '/auth/login');
     expect(match).not.toBeNull();
-    expect(match!.handler).toBe(handler);
+    expect(match!.handlers[0]).toBe(handler);
   });
 
   it('should handle nested prefixes correctly', () => {
