@@ -147,8 +147,10 @@ export function createDolphinServer(options: { port?: number; host?: string } = 
         // If no response sent, send the last handler result or 204
         if (!res.headersSent) {
           if (result !== undefined && result !== null) {
-            // Apply status from result if present, otherwise use pendingStatus
-            const status = result.status || pendingStatus;
+            // Apply status from result if it's a valid number, otherwise use pendingStatus
+            const status = (typeof result.status === 'number' && result.status >= 100 && result.status < 600) 
+              ? result.status 
+              : pendingStatus;
             send(result, 'application/json', status);
           } else {
             send(null, 'application/json', 204);
@@ -177,7 +179,7 @@ export function createDolphinServer(options: { port?: number; host?: string } = 
       }
     },
     listen: (port: number = options.port || 3000, callback?: () => void) => {
-      server.listen(port, options.host || '0.0.0.0', callback);
+      return server.listen(port, options.host || '0.0.0.0', callback);
     },
     close: () => server.close()
   };
