@@ -14,16 +14,19 @@
     "types": ["node", "jest"]
   },
   "include": [
-    "server/**/*",        // ← यो थप्नुहोस् (सबै server फोल्डर)
-    "server.ts",          // ← यो पनि थप्नुहोस्
+    "server/**/*",
     "auth/**/*",
-    "authController/**/*",          
+    "authController/**/*",
     "controller/**/*",
     "curd/**/*",
     "middleware/**/*",
     "realtime/**/*",
     "adapters/**/*",
-    "index.ts"
+    "router/**/*",
+    "swagger/**/*",
+    "djson/**/*",
+    "index.ts",
+    "demo-server.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

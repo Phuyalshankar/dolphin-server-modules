@@ -34,6 +34,8 @@
   },
   "scripts": {
     "build": "tsc",
+    "start": "node dist/demo-server.js",
+    "dev": "npm run build && npm run start",
     "test": "jest",
     "prepublishOnly": "npm run build"
   },
