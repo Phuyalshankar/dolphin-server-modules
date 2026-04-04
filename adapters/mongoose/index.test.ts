@@ -110,7 +110,7 @@ describe('Mongoose Adapter', () => {
     expect(mockModel.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: '123' },
       expect.objectContaining({ name: 'Updated', updatedAt: expect.any(Date) }),
-      { new: true }
+      { returnDocument: 'after' }
     );
     expect(result.id).toBe('123');
   });

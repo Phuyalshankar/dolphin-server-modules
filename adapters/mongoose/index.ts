@@ -98,7 +98,7 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
     },
 
     async updateUser(id: string, data: any) {
-      const user = await User.findByIdAndUpdate(id, data, { new: true }).lean(leanByDefault);
+      const user = await User.findByIdAndUpdate(id, data, { returnDocument: 'after' }).lean(leanByDefault);
       return mapDoc(user);
     },
 
@@ -166,7 +166,7 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
       const doc = await Model.findOneAndUpdate(
         query,
         { ...data, updatedAt: new Date() },
-        { new: true }
+        { returnDocument: 'after' }
       ).lean(leanByDefault);
       
       return mapDoc(doc);
@@ -196,7 +196,7 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
         const doc = await Model.findOneAndUpdate(
           query,
           { [softDeleteField]: new Date(), updatedAt: new Date() },
-          { new: true }
+          { returnDocument: 'after' }
         ).lean(leanByDefault);
         return mapDoc(doc);
       } else {
@@ -234,7 +234,7 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
       const doc = await Model.findOneAndUpdate(
         query,
         { [softDeleteField]: null, updatedAt: new Date() },
-        { new: true }
+        { returnDocument: 'after' }
       ).lean(leanByDefault);
       
       return mapDoc(doc);
