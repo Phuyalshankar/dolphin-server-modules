@@ -1,4 +1,4 @@
-# 🐬 Dolphin Framework (v1.5.5)
+# 🐬 Dolphin Framework (v1.5.6)
 
 **Dolphin** is a 2026-ready, ultra-lightweight, and 100% modular backend ecosystem built on native Node.js. It's not just a framework; it's a universal toolkit for Web, Microservices, and Industrial IoT.
 
@@ -41,7 +41,7 @@ import { createDolphinServer } from 'dolphin-server-modules/server';
 const app = createDolphinServer();
 
 app.get('/ping', (ctx) => {
-  return { message: 'pong', version: '1.5.5' };
+  return { message: 'pong', version: '1.5.6' };
 });
 
 app.listen(3000, () => console.log("🐬 Dolphin swimming on port 3000"));

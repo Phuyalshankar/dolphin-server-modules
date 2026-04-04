@@ -1,4 +1,4 @@
-# Dolphin Framework Tutorial 🐬 (v1.5.5)
+# Dolphin Framework Tutorial 🐬 (v1.5.6)
 
 Welcome to the official tutorial for the **Dolphin Framework**. This guide will take you from zero to a production-ready API using native, high-performance modules.
 
