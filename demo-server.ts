@@ -1,6 +1,135 @@
 import { createDolphinServer } from './server/server';
+import { createCRUD, DatabaseAdapter } from './curd/crud';
+
+// ===== In-Memory Database Adapter =====
+function createMemoryAdapter(): DatabaseAdapter {
+  const store: Record<string, any[]> = {};
+
+  const getCol = (col: string) => {
+    if (!store[col]) store[col] = [];
+    return store[col];
+  };
+
+  return {
+    async create(collection, data) {
+      const col = getCol(collection);
+      col.push(data);
+      return data;
+    },
+    async read(collection, query) {
+      const col = getCol(collection);
+      if (!query || Object.keys(query).length === 0) return col;
+      return col.filter(item => {
+        for (const [k, v] of Object.entries(query as Record<string, any>)) {
+          if (item[k] !== v) return false;
+        }
+        return true;
+      });
+    },
+    async update(collection, query, data) {
+      const col = getCol(collection);
+      const key = query.id || query._id;
+      const idx = col.findIndex(item => item.id === key || item._id === key);
+      if (idx !== -1) {
+        col[idx] = { ...col[idx], ...data };
+        return col[idx];
+      }
+      return null;
+    },
+    async delete(collection, query) {
+      const col = getCol(collection);
+      const key = query.id || query._id;
+      const idx = col.findIndex(item => item.id === key || item._id === key);
+      if (idx !== -1) {
+        const [deleted] = col.splice(idx, 1);
+        return deleted;
+      }
+      return null;
+    },
+    async createUser(data) { return this.create('users', data); },
+    async findUserByEmail(email) {
+      return (await this.read('users', {})).find((u: any) => u.email === email) || null;
+    },
+    async findUserById(id) {
+      return (await this.read('users', {})).find((u: any) => u.id === id) || null;
+    },
+    async updateUser(id, data) { return this.update('users', { id }, data); },
+    async saveRefreshToken(data) { await this.create('refresh_tokens', data); },
+    async findRefreshToken(token) {
+      return (await this.read('refresh_tokens', {})).find((t: any) => t.token === token) || null;
+    },
+    async deleteRefreshToken(token) {
+      const col = getCol('refresh_tokens');
+      const idx = col.findIndex((t: any) => t.token === token);
+      if (idx !== -1) col.splice(idx, 1);
+    },
+  };
+}
 
 const app = createDolphinServer();
+const db = createMemoryAdapter();
+
+// enforceOwnership: false — auth नचाहिने CRUD
+const service = createCRUD(db, { enforceOwnership: false });
+const COLLECTION = 'products';
+
+// ===== CORRECT ROUTE MAPPINGS =====
+// GET all products
+app.get('/products', async (ctx: any) => {
+  const { limit, offset, ...filters } = ctx.query;
+  const results = await service.read(
+    COLLECTION,
+    filters,
+    { limit: limit ? parseInt(limit) : undefined, offset: offset ? parseInt(offset) : undefined }
+  );
+  ctx.json(results);
+});
+
+// GET single product by ID
+app.get('/products/:id', async (ctx: any) => {
+  const result = await service.readOne(COLLECTION, ctx.params.id);
+  if (!result) return ctx.status(404).json({ error: 'Product not found' });
+  ctx.json(result);
+});
+
+// POST create product
+app.post('/products', async (ctx: any) => {
+  const result = await service.create(COLLECTION, ctx.body);
+  ctx.status(201).json(result);
+});
+
+// PUT update product by ID
+app.put('/products/:id', async (ctx: any) => {
+  const result = await service.updateOne(COLLECTION, ctx.params.id, ctx.body);
+  if (!result) return ctx.status(404).json({ error: 'Product not found' });
+  ctx.json(result);
+});
+
+// DELETE product by ID
+app.delete('/products/:id', async (ctx: any) => {
+  const result = await service.deleteOne(COLLECTION, ctx.params.id);
+  if (!result) return ctx.status(404).json({ error: 'Product not found' });
+  ctx.json({ success: true, deleted: result });
+});
+
+// ===== Utility Routes =====
+app.get('/api/health', (ctx: any) => {
+  ctx.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
+});
+
+app.post('/api/echo', (ctx: any) => {
+  ctx.json({ echo: ctx.body, received_at: new Date().toISOString() });
+});
+
+app.get('/api/info', (ctx: any) => {
+  ctx.json({
+    name: 'Dolphin Framework',
+    version: '1.5.5',
+    description: 'Modular, lightweight, high-performance backend ecosystem',
+    performance: '45,000+ RPS',
+    author: 'Shankar Phuyal',
+  });
+});
 
 app.get('/', (ctx: any) => {
   ctx.html(`<!DOCTYPE html>
@@ -15,159 +144,64 @@ app.get('/', (ctx: any) => {
       font-family: 'Segoe UI', system-ui, sans-serif;
       background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
       min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       color: #fff;
+      padding: 2rem;
     }
-    .container {
-      max-width: 860px;
-      width: 90%;
-      text-align: center;
-    }
-    .logo { font-size: 5rem; margin-bottom: 1rem; }
-    h1 { font-size: 2.8rem; font-weight: 700; margin-bottom: 0.5rem; }
-    .tagline { font-size: 1.15rem; color: #a0c4d8; margin-bottom: 2.5rem; }
-    .badge {
-      display: inline-block;
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.2);
-      padding: 0.3rem 0.9rem;
-      border-radius: 999px;
-      font-size: 0.85rem;
-      margin: 0.25rem;
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-      gap: 1.2rem;
-      margin: 2.5rem 0;
-      text-align: left;
-    }
-    .card {
-      background: rgba(255,255,255,0.07);
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 12px;
-      padding: 1.5rem;
-    }
-    .card h3 { font-size: 1rem; margin-bottom: 0.5rem; color: #7ecfff; }
-    .card p { font-size: 0.88rem; color: #c0d8e8; line-height: 1.5; }
-    .endpoints { margin-top: 2rem; text-align: left; }
-    .endpoints h2 { font-size: 1.2rem; margin-bottom: 1rem; color: #7ecfff; }
+    .container { max-width: 860px; margin: 0 auto; }
+    .header { text-align: center; margin-bottom: 2.5rem; }
+    .logo { font-size: 4rem; }
+    h1 { font-size: 2.5rem; font-weight: 700; margin: 0.5rem 0; }
+    .tagline { color: #a0c4d8; font-size: 1.05rem; }
+    .section { margin-bottom: 2rem; }
+    .section h2 { font-size: 1rem; color: #7ecfff; margin-bottom: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.4rem; }
     .ep {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      padding: 0.7rem 1rem;
-      background: rgba(255,255,255,0.05);
-      border-radius: 8px;
-      margin-bottom: 0.5rem;
-      font-size: 0.9rem;
+      display: flex; align-items: center; gap: 0.8rem;
+      padding: 0.6rem 1rem; background: rgba(255,255,255,0.05);
+      border-radius: 8px; margin-bottom: 0.4rem; font-size: 0.87rem;
     }
     .method {
-      font-weight: bold;
-      font-size: 0.8rem;
-      padding: 0.2rem 0.5rem;
-      border-radius: 4px;
-      min-width: 50px;
-      text-align: center;
+      font-weight: bold; font-size: 0.72rem; padding: 0.2rem 0.45rem;
+      border-radius: 4px; min-width: 55px; text-align: center; flex-shrink: 0;
     }
-    .get { background: #1a6b3f; color: #4ade80; }
-    .post { background: #1a3b6b; color: #60a5fa; }
-    a { color: #7ecfff; }
+    .get    { background: #1a6b3f; color: #4ade80; }
+    .post   { background: #1a3b6b; color: #60a5fa; }
+    .put    { background: #5c3a00; color: #fbbf24; }
+    .del    { background: #6b1a1a; color: #f87171; }
+    code { background: rgba(255,255,255,0.1); padding: 0.1rem 0.4rem; border-radius: 3px; font-family: monospace; }
+    .note { font-size: 0.8rem; color: #7a9fb0; margin-top: 0.5rem; }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="logo">🐬</div>
-    <h1>Dolphin Framework</h1>
-    <p class="tagline">Modular · Zero-Dependency Core · 45,000+ RPS · 2026-Ready</p>
-    <div>
-      <span class="badge">TypeScript</span>
-      <span class="badge">Node.js Native</span>
-      <span class="badge">JWT Auth</span>
-      <span class="badge">WebSocket</span>
-      <span class="badge">IoT Ready</span>
-      <span class="badge">Zod Validation</span>
-      <span class="badge">OpenAPI/Swagger</span>
+    <div class="header">
+      <div class="logo">🐬</div>
+      <h1>Dolphin Framework</h1>
+      <p class="tagline">Modular · Zero-Dependency Core · 45,000+ RPS · 2026-Ready</p>
     </div>
-    <div class="grid">
-      <div class="card">
-        <h3>Zero Dependencies Core</h3>
-        <p>Built on native Node.js <code>http</code> and <code>events</code>. No Express, no Fastify — pure performance.</p>
-      </div>
-      <div class="card">
-        <h3>Unified Context (ctx)</h3>
-        <p>Express-compatible ctx API with auto JSON serialization, params, query, and body parsing built-in.</p>
-      </div>
-      <div class="card">
-        <h3>Auth + 2FA</h3>
-        <p>JWT-based authentication with Argon2 password hashing and Time-based One-Time Password (TOTP) 2FA support.</p>
-      </div>
-      <div class="card">
-        <h3>Realtime PubSub</h3>
-        <p>Topic trie engine with binary codecs for high-throughput WebSocket pub/sub and IIoT workloads.</p>
-      </div>
-      <div class="card">
-        <h3>CRUD + Controller</h3>
-        <p>Modular CRUD utilities and controller wrappers with Mongoose adapter and Zod schema validation.</p>
-      </div>
-      <div class="card">
-        <h3>Auto Swagger Docs</h3>
-        <p>Automatic OpenAPI 3.0 documentation generation from your route definitions. No annotation overhead.</p>
-      </div>
+
+    <div class="section">
+      <h2>Products CRUD API</h2>
+      <div class="ep"><span class="method get">GET</span><code>/products</code><span>सबै products ल्याउनु</span></div>
+      <div class="ep"><span class="method get">GET</span><code>/products/:id</code><span>ID बाट एउटा product ल्याउनु</span></div>
+      <div class="ep"><span class="method post">POST</span><code>/products</code><span>नयाँ product बनाउनु</span></div>
+      <div class="ep"><span class="method put">PUT</span><code>/products/:id</code><span>ID बाट product update गर्नु</span></div>
+      <div class="ep"><span class="method del">DELETE</span><code>/products/:id</code><span>ID बाट product मेटाउनु</span></div>
+      <p class="note">* In-memory storage — server restart भएमा data reset हुन्छ</p>
     </div>
-    <div class="endpoints">
-      <h2>Live API Endpoints</h2>
-      <div class="ep"><span class="method get">GET</span> <span>/ — This page</span></div>
-      <div class="ep"><span class="method get">GET</span> <span><a href="/api/info">/api/info</a> — Framework info (JSON)</span></div>
-      <div class="ep"><span class="method get">GET</span> <span><a href="/api/health">/api/health</a> — Health check</span></div>
-      <div class="ep"><span class="method post">POST</span> <span>/api/echo — Echo request body back</span></div>
+
+    <div class="section">
+      <h2>Utility Endpoints</h2>
+      <div class="ep"><span class="method get">GET</span><code>/api/health</code><span>Health check</span></div>
+      <div class="ep"><span class="method get">GET</span><code>/api/info</code><span>Framework info</span></div>
+      <div class="ep"><span class="method post">POST</span><code>/api/echo</code><span>Request body echo</span></div>
     </div>
   </div>
 </body>
 </html>`);
 });
 
-app.get('/api/info', (ctx: any) => {
-  ctx.json({
-    name: 'Dolphin Framework',
-    version: '1.5.5',
-    description: 'Modular, lightweight, high-performance backend ecosystem',
-    features: [
-      'Zero-dependency core (native Node.js http + events)',
-      'Unified Context (ctx) API',
-      'JWT Authentication + Argon2 hashing + 2FA (TOTP)',
-      'WebSocket Realtime PubSub with topic trie',
-      'CRUD utilities + Mongoose adapter',
-      'Zod schema validation middleware',
-      'Auto OpenAPI/Swagger documentation',
-      'IIoT support (Modbus, HL7, DICOM)',
-    ],
-    performance: '45,000+ RPS',
-    author: 'Shankar Phuyal',
-    repository: 'https://github.com/Phuyalshankar/dolphin-server-modules',
-  });
-});
-
-app.get('/api/health', (ctx: any) => {
-  ctx.json({
-    status: 'ok',
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    timestamp: new Date().toISOString(),
-  });
-});
-
-app.post('/api/echo', (ctx: any) => {
-  ctx.json({ echo: ctx.body, received_at: new Date().toISOString() });
-});
-
 const PORT = 5000;
 app.listen(PORT, () => {
-  console.log(`🐬 Dolphin Framework demo running at http://0.0.0.0:${PORT}`);
-  console.log(`   GET  /         → HTML landing page`);
-  console.log(`   GET  /api/info → Framework info`);
-  console.log(`   GET  /api/health → Health check`);
-  console.log(`   POST /api/echo  → Echo body`);
+  console.log(`🐬 Dolphin Framework running at http://0.0.0.0:${PORT}`);
+  console.log(`   CRUD routes: /products`);
 });
