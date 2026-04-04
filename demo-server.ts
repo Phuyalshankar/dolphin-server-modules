@@ -1,157 +1,142 @@
+import mongoose, { Schema } from 'mongoose';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createDolphinServer } from './server/server';
-import { createCRUD, DatabaseAdapter } from './curd/crud';
+import { createCRUD } from './curd/crud';
+import { createMongooseAdapter } from './adapters/mongoose';
 
-// ===== In-Memory Database Adapter =====
-function createMemoryAdapter(): DatabaseAdapter {
-  const store: Record<string, any[]> = {};
+// ===== Mongoose Models =====
+const ProductSchema = new Schema({
+  id:        { type: String },
+  name:      { type: String, required: true },
+  price:     { type: Number },
+  category:  { type: String },
+  userId:    { type: String },
+  createdAt: { type: String },
+  updatedAt: { type: String },
+}, { timestamps: false });
 
-  const getCol = (col: string) => {
-    if (!store[col]) store[col] = [];
-    return store[col];
-  };
+const UserSchema = new Schema({ email: String, password: String });
+const RefreshTokenSchema = new Schema({ token: String, userId: String });
 
-  return {
-    async create(collection, data) {
-      const col = getCol(collection);
-      col.push(data);
-      return data;
-    },
-    async read(collection, query) {
-      const col = getCol(collection);
-      if (!query || Object.keys(query).length === 0) return col;
-      return col.filter(item => {
-        for (const [k, v] of Object.entries(query as Record<string, any>)) {
-          if (item[k] !== v) return false;
-        }
-        return true;
-      });
-    },
-    async update(collection, query, data) {
-      const col = getCol(collection);
-      const key = query.id || query._id;
-      const idx = col.findIndex(item => item.id === key || item._id === key);
-      if (idx !== -1) {
-        col[idx] = { ...col[idx], ...data };
-        return col[idx];
-      }
-      return null;
-    },
-    async delete(collection, query) {
-      const col = getCol(collection);
-      const key = query.id || query._id;
-      const idx = col.findIndex(item => item.id === key || item._id === key);
-      if (idx !== -1) {
-        const [deleted] = col.splice(idx, 1);
-        return deleted;
-      }
-      return null;
-    },
-    async createUser(data) { return this.create('users', data); },
-    async findUserByEmail(email) {
-      return (await this.read('users', {})).find((u: any) => u.email === email) || null;
-    },
-    async findUserById(id) {
-      return (await this.read('users', {})).find((u: any) => u.id === id) || null;
-    },
-    async updateUser(id, data) { return this.update('users', { id }, data); },
-    async saveRefreshToken(data) { await this.create('refresh_tokens', data); },
-    async findRefreshToken(token) {
-      return (await this.read('refresh_tokens', {})).find((t: any) => t.token === token) || null;
-    },
-    async deleteRefreshToken(token) {
-      const col = getCol('refresh_tokens');
-      const idx = col.findIndex((t: any) => t.token === token);
-      if (idx !== -1) col.splice(idx, 1);
-    },
-  };
-}
+const Product      = mongoose.model('Product', ProductSchema);
+const User         = mongoose.model('User', UserSchema);
+const RefreshToken = mongoose.model('RefreshToken', RefreshTokenSchema);
 
-const app = createDolphinServer();
-const db = createMemoryAdapter();
+async function bootstrap() {
+  // 1. Start in-process MongoDB (real Mongoose engine, no external server needed)
+  console.log('⏳ MongoDB इन्जिन start गर्दै...');
+  const mongod = await MongoMemoryServer.create();
+  const uri = mongod.getUri();
+  await mongoose.connect(uri);
+  console.log('✅ MongoDB connected:', uri);
 
-// enforceOwnership: false — auth नचाहिने CRUD
-const service = createCRUD(db, { enforceOwnership: false });
-const COLLECTION = 'products';
-
-// ===== CORRECT ROUTE MAPPINGS =====
-// GET all products
-app.get('/products', async (ctx: any) => {
-  const { limit, offset, ...filters } = ctx.query;
-  const results = await service.read(
-    COLLECTION,
-    filters,
-    { limit: limit ? parseInt(limit) : undefined, offset: offset ? parseInt(offset) : undefined }
-  );
-  ctx.json(results);
-});
-
-// GET single product by ID
-app.get('/products/:id', async (ctx: any) => {
-  const result = await service.readOne(COLLECTION, ctx.params.id);
-  if (!result) return ctx.status(404).json({ error: 'Product not found' });
-  ctx.json(result);
-});
-
-// POST create product
-app.post('/products', async (ctx: any) => {
-  const result = await service.create(COLLECTION, ctx.body);
-  ctx.status(201).json(result);
-});
-
-// PUT update product by ID
-app.put('/products/:id', async (ctx: any) => {
-  const result = await service.updateOne(COLLECTION, ctx.params.id, ctx.body);
-  if (!result) return ctx.status(404).json({ error: 'Product not found' });
-  ctx.json(result);
-});
-
-// DELETE product by ID
-app.delete('/products/:id', async (ctx: any) => {
-  const result = await service.deleteOne(COLLECTION, ctx.params.id);
-  if (!result) return ctx.status(404).json({ error: 'Product not found' });
-  ctx.json({ success: true, deleted: result });
-});
-
-// ===== Utility Routes =====
-app.get('/api/health', (ctx: any) => {
-  ctx.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
-});
-
-app.post('/api/echo', (ctx: any) => {
-  ctx.json({ echo: ctx.body, received_at: new Date().toISOString() });
-});
-
-app.get('/api/info', (ctx: any) => {
-  ctx.json({
-    name: 'Dolphin Framework',
-    version: '1.5.5',
-    description: 'Modular, lightweight, high-performance backend ecosystem',
-    performance: '45,000+ RPS',
-    author: 'Shankar Phuyal',
+  // 2. Build real Mongoose adapter
+  const mongoAdapter = createMongooseAdapter({
+    User,
+    RefreshToken,
+    models: { Product },
+    leanByDefault: true,
+    softDelete: false,
   });
-});
 
-app.get('/', (ctx: any) => {
-  ctx.html(`<!DOCTYPE html>
+  // 3. CRUD service — enforceOwnership: false (auth नचाहिने)
+  const service = createCRUD(mongoAdapter as any, { enforceOwnership: false });
+  const COLLECTION = 'Product';
+
+  // 4. Dolphin server
+  const app = createDolphinServer();
+
+  // ===== CORRECT ROUTE MAPPINGS =====
+
+  // GET all products
+  app.get('/products', async (ctx: any) => {
+    const { limit, offset, ...filters } = ctx.query;
+    const results = await service.read(
+      COLLECTION,
+      filters,
+      {
+        limit:  limit  ? parseInt(limit)  : undefined,
+        offset: offset ? parseInt(offset) : undefined,
+      }
+    );
+    ctx.json(results);
+  });
+
+  // GET single product by ID
+  app.get('/products/:id', async (ctx: any) => {
+    const result = await service.readOne(COLLECTION, ctx.params.id);
+    if (!result) return ctx.status(404).json({ error: 'Product not found' });
+    ctx.json(result);
+  });
+
+  // POST create product
+  app.post('/products', async (ctx: any) => {
+    const result = await service.create(COLLECTION, ctx.body);
+    ctx.status(201).json(result);
+  });
+
+  // PUT update product by ID
+  app.put('/products/:id', async (ctx: any) => {
+    const result = await service.updateOne(COLLECTION, ctx.params.id, ctx.body);
+    if (!result) return ctx.status(404).json({ error: 'Product not found' });
+    ctx.json(result);
+  });
+
+  // DELETE product by ID
+  app.delete('/products/:id', async (ctx: any) => {
+    const result = await service.deleteOne(COLLECTION, ctx.params.id);
+    if (!result) return ctx.status(404).json({ error: 'Product not found' });
+    ctx.json({ success: true, deleted: result });
+  });
+
+  // ===== Utility Routes =====
+  app.get('/api/health', (ctx: any) => {
+    ctx.json({
+      status: 'ok',
+      db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  app.post('/api/echo', (ctx: any) => {
+    ctx.json({ echo: ctx.body, received_at: new Date().toISOString() });
+  });
+
+  app.get('/api/info', (ctx: any) => {
+    ctx.json({
+      name: 'Dolphin Framework',
+      version: '1.5.5',
+      adapter: 'Real Mongoose (mongodb-memory-server)',
+      mongoUri: uri,
+    });
+  });
+
+  app.get('/', (ctx: any) => {
+    ctx.html(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dolphin Framework</title>
+  <title>Dolphin Framework — Mongoose</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Segoe UI', system-ui, sans-serif;
       background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-      min-height: 100vh;
-      color: #fff;
-      padding: 2rem;
+      min-height: 100vh; color: #fff; padding: 2rem;
     }
     .container { max-width: 860px; margin: 0 auto; }
     .header { text-align: center; margin-bottom: 2.5rem; }
     .logo { font-size: 4rem; }
-    h1 { font-size: 2.5rem; font-weight: 700; margin: 0.5rem 0; }
-    .tagline { color: #a0c4d8; font-size: 1.05rem; }
+    h1 { font-size: 2.3rem; font-weight: 700; margin: 0.5rem 0; }
+    .tagline { color: #a0c4d8; font-size: 1rem; }
+    .badge {
+      display: inline-block; background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2); padding: 0.25rem 0.75rem;
+      border-radius: 999px; font-size: 0.82rem; margin: 0.2rem;
+    }
+    .green { border-color: #4ade80; color: #4ade80; }
     .section { margin-bottom: 2rem; }
     .section h2 { font-size: 1rem; color: #7ecfff; margin-bottom: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.4rem; }
     .ep {
@@ -176,32 +161,45 @@ app.get('/', (ctx: any) => {
     <div class="header">
       <div class="logo">🐬</div>
       <h1>Dolphin Framework</h1>
-      <p class="tagline">Modular · Zero-Dependency Core · 45,000+ RPS · 2026-Ready</p>
+      <p class="tagline">Real Mongoose Adapter · MongoDB Engine · CRUD Verified</p>
+      <div style="margin-top:1rem;">
+        <span class="badge green">✅ MongoDB Connected</span>
+        <span class="badge">Mongoose ORM</span>
+        <span class="badge">enforceOwnership: false</span>
+      </div>
     </div>
 
     <div class="section">
-      <h2>Products CRUD API</h2>
+      <h2>Products CRUD API (Real Mongoose)</h2>
       <div class="ep"><span class="method get">GET</span><code>/products</code><span>सबै products ल्याउनु</span></div>
       <div class="ep"><span class="method get">GET</span><code>/products/:id</code><span>ID बाट एउटा product ल्याउनु</span></div>
-      <div class="ep"><span class="method post">POST</span><code>/products</code><span>नयाँ product बनाउनु</span></div>
+      <div class="ep"><span class="method post">POST</span><code>/products</code><span>नयाँ product बनाउनु (body: JSON)</span></div>
       <div class="ep"><span class="method put">PUT</span><code>/products/:id</code><span>ID बाट product update गर्नु</span></div>
       <div class="ep"><span class="method del">DELETE</span><code>/products/:id</code><span>ID बाट product मेटाउनु</span></div>
-      <p class="note">* In-memory storage — server restart भएमा data reset हुन्छ</p>
+      <p class="note">* mongodb-memory-server — Real Mongoose engine, server restart भएमा data reset हुन्छ</p>
     </div>
 
     <div class="section">
       <h2>Utility Endpoints</h2>
-      <div class="ep"><span class="method get">GET</span><code>/api/health</code><span>Health check</span></div>
-      <div class="ep"><span class="method get">GET</span><code>/api/info</code><span>Framework info</span></div>
+      <div class="ep"><span class="method get">GET</span><code>/api/health</code><span>Health + DB status</span></div>
+      <div class="ep"><span class="method get">GET</span><code>/api/info</code><span>Framework + adapter info</span></div>
       <div class="ep"><span class="method post">POST</span><code>/api/echo</code><span>Request body echo</span></div>
     </div>
   </div>
 </body>
 </html>`);
-});
+  });
 
-const PORT = 5000;
-app.listen(PORT, () => {
-  console.log(`🐬 Dolphin Framework running at http://0.0.0.0:${PORT}`);
-  console.log(`   CRUD routes: /products`);
+  // 5. Start server
+  const PORT = 5000;
+  app.listen(PORT, () => {
+    console.log(`🐬 Dolphin + Real Mongoose running at http://0.0.0.0:${PORT}`);
+    console.log(`   MongoDB URI: ${uri}`);
+    console.log(`   CRUD: GET/POST /products  |  GET/PUT/DELETE /products/:id`);
+  });
+}
+
+bootstrap().catch(err => {
+  console.error('❌ Bootstrap failed:', err);
+  process.exit(1);
 });
