@@ -55,9 +55,9 @@ const app = createDolphinServer();
 Dolphin uses a unified `ctx` object for ultra-clean handlers.
 
 ```typescript
-// Simple Route
+// Simple Route (v1.4.7: Now supports Auto-JSON by returning objects!)
 app.get('/', (ctx) => {
-  ctx.json({ message: "Welcome to Dolphin!" });
+  return { message: "Welcome to Dolphin!" };
 });
 
 // Dynamic Route with Params
@@ -78,10 +78,10 @@ app.post('/echo', (ctx) => {
 Secure your routes with the `auth` module:
 
 ```typescript
-// Protecting a route
-app.get('/profile', auth.middleware(), (ctx) => {
+// Protecting a route (v1.4.7: Chained Multi-Handler support!)
+app.get('/profile', auth.requireAuth, async (ctx) => {
   // ctx.req.user is automatically populated
-  ctx.json({ user: ctx.req.user });
+  return { user: ctx.req.user };
 });
 ```
 

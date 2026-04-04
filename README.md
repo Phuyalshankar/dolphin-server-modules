@@ -1,4 +1,4 @@
-# 🐬 Dolphin Framework (v1.1.4.1)
+# 🐬 Dolphin Framework (v1.4.7)
 
 **Dolphin** is a 2026-ready, ultra-lightweight, and 100% modular backend ecosystem built on native Node.js. It’s not just a framework; it’s a universal toolkit for Web, Microservices, and Industrial IoT.
 
@@ -18,8 +18,9 @@ Dolphin Framework को विस्तृत र आधिकारिक ग�
 
 - **Zero-Dependency Core**: Built on native `http` & `events`. No bloat.
 - **Universal Compatibility**: Use modules in Next.js, Express, or Fastify.
+- **Multi-Handler Middleware**: Support for Express-style middleware chains `(ctx, next)`.
+- **Auto-JSON Serialization**: Simply `return` an object from your handler!
 - **Industrial IoT (IIoT)**: Native support for HL7, Modbus, and DICOM via binary plugins.
-- **Sub-folder Exports**: Import only what you need (e.g., `dolphin-server-modules/auth`).
 - **Unified Context (ctx)**: Modern developer experience with legacy middleware support.
 
 ---
@@ -36,12 +37,13 @@ npm install dolphin-server-modules
 ### 1. High-Performance Web Server
 ```typescript
 import { createDolphinServer } from 'dolphin-server-modules/server';
-import cors from 'cors'; // Express middleware works out-of-the-box!
 
 const app = createDolphinServer();
-app.use(cors());
 
-app.get('/ping', (ctx) => ctx.json({ message: 'pong' }));
+// Returning an object automatically sends a JSON response! (v1.4.7)
+app.get('/ping', (ctx) => {
+  return { message: 'pong', version: '1.4.7' };
+});
 
 app.listen(3000, () => console.log("🐬 Dolphin swimming on port 3000"));
 ```
@@ -67,28 +69,34 @@ rt.subscribe('factory/machine/+', (data) => {
 
 | Module | Path | Description |
 | :--- | :--- | :--- |
-| **Server** | `/server` | Native-based server with `ctx` API. |
-| **Router** | `/router` | Standalone sub-routers with nested prefix support. |
+| **Server** | `/server` | Native-based server with `ctx` API & Auto-JSON. |
+| **Router** | `/router` | Standalone sub-routers with Multi-Handler support. |
 | **Auth** | `/auth` | Argon2/JWT based secure auth with 2FA support. |
 | **Realtime** | `/realtime` | Pub/Sub engine with `TopicTrie` & Binary Codecs. |
 | **Validation** | `/middleware/zod` | Type-safe validation for Express, Next.js, and Dolphin. |
-| **Swagger Docs** | `/swagger` | Auto-generated OpenAPI docs from Zod schemas (UI included). |
+| **Swagger Docs** | `/swagger` | Auto-generated OpenAPI docs from Zod schemas. |
 | **IoT Plugins** | `/realtime/plugins` | Native parsers for HL7, Modbus, and DICOM. |
 | **DB Adapters** | `/adapters` | Mongoose and SQL adapters for rapid CRUD. |
 
 ---
 
-## 🛣️ Advanced Sub-Routing (New!)
-Cleanly organize large-scale applications:
+## 🛣️ Advanced Middleware & Sub-Routing
+Cleanly organize large-scale applications with Express-style middleware:
 
 ```typescript
 import { createDolphinRouter } from 'dolphin-server-modules/router';
+import { createDolphinAuthController } from 'dolphin-server-modules/auth-controller';
 
+const auth = createDolphinAuthController(db, config);
 const apiV1 = createDolphinRouter();
-apiV1.get('/status', (ctx) => ctx.json({ ok: true }));
+
+// ✅ NEW: Supports multiple handlers (middleware) per route
+apiV1.get('/me', auth.requireAuth, async (ctx) => {
+  return { user: ctx.req.user }; // Context contains decoded token
+});
 
 const mainApp = createDolphinServer();
-mainApp.use('/api/v1', apiV1); // Accessible at /api/v1/status
+mainApp.use('/api/v1', apiV1);
 ```
 
 ---
@@ -107,6 +115,8 @@ mainApp.use('/api/v1', apiV1); // Accessible at /api/v1/status
 - [x] Universal Plugin System (HL7/Modbus/Binary)
 - [x] Recursive Sub-routing
 - [x] **Auto-Doc**: Automatic Swagger/OpenAPI generation from Zod schemas.
+- [x] **Middleware Chains**: Support for `(ctx, next)` in routes.
+- [x] **Auto-JSON**: Return objects directly from handlers.
 - [ ] **Dolphin CLI**: `npx dolphin init` for automated scaffolding.
 
 ---

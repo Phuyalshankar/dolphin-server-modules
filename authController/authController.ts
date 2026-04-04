@@ -1,9 +1,25 @@
 // dolphin-server-modules/auth-controller.ts
+
 import { createAuth } from "../auth/auth";
 import crypto from 'node:crypto';
 
+// ✅ यो फङ्सनले ब्राउजरबाट आएको Raw Header बाट कुकी निकाल्छ
+const getCookie = (req: any, name: string): string | undefined => {
+  const cookieHeader = req.headers?.cookie || req.req?.headers?.cookie;
+  if (!cookieHeader) return undefined;
+  const match = cookieHeader.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return match ? match[2] : undefined;
+};
+
 export const createDolphinAuthController = (db: any, authConfig: any) => {
-  const authCore = createAuth(authConfig);
+  const authCore = createAuth({
+    secret: authConfig.secret,
+    cookieMaxAge: authConfig.cookieMaxAge,
+    issuer: authConfig.issuer,
+    rateLimit: authConfig.rateLimit,
+    redisClient: authConfig.redisClient,
+    secureCookies: authConfig.secureCookies ?? false
+  });
 
   const verifyPassword = async (password: string, hash: string) => {
     try {
@@ -25,7 +41,6 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
 
   const generateResetToken = () => crypto.randomBytes(32).toString('hex');
 
-  // ======= CONTROLLERS =======
   const handlers = {
     register: async (ctx: any) => {
       try {
@@ -38,7 +53,17 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
 
     login: async (ctx: any) => {
       try {
-        const result = await authCore.login(db, ctx.body, ctx.res);
+        const dolphinRes = {
+          cookie: (name: string, value: string, options: any) => {
+            const maxAgeSec = Math.floor(options.maxAge / 1000);
+            const secureFlag = options.secure ? '; Secure' : '';
+            // ✅ Path=/ थप्नु अनिवार्य छ, नत्र अरु Route मा कुकी जाँदैन
+            ctx.res.setHeader('Set-Cookie', 
+              `${name}=${value}; HttpOnly; Max-Age=${maxAgeSec}; Path=/; SameSite=Lax${secureFlag}`
+            );
+          }
+        };
+        const result = await authCore.login(db, ctx.body, dolphinRes);
         return { success: true, ...result };
       } catch (err: any) {
         return { success: false, error: err.message, status: err.status || 401 };
@@ -47,19 +72,41 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
 
     refresh: async (ctx: any) => {
       try {
-        const refreshToken = ctx.req.cookies?.rt;
-        const result = await authCore.refresh(db, refreshToken, ctx.res);
+        // ✅ नयाँ तरिका (१००% चल्छ): सिधै Header बाट कुकी तान्ने
+        const refreshToken = getCookie(ctx.req, 'rt');
+        
+        if (!refreshToken) {
+          return { success: false, error: 'No refresh token provided', status: 401 };
+        }
+
+        const dolphinRes = {
+          cookie: (name: string, value: string, options: any) => {
+            const maxAgeSec = Math.floor(options.maxAge / 1000);
+            const secureFlag = options.secure ? '; Secure' : '';
+            ctx.res.setHeader('Set-Cookie', 
+              `${name}=${value}; HttpOnly; Max-Age=${maxAgeSec}; Path=/; SameSite=Lax${secureFlag}`
+            );
+          }
+        };
+        const result = await authCore.refresh(db, refreshToken, dolphinRes);
         return { success: true, ...result };
       } catch (err: any) {
         return { success: false, error: err.message, status: 401 };
       }
     },
 
+    // ✅ FIXED: TypeScript error solved safely
     logout: async (ctx: any) => {
       try {
-        const refreshToken = ctx.req.cookies?.rt;
-        await authCore.logout(db, refreshToken);
-        ctx.res.setHeader('Set-Cookie', 'rt=; HttpOnly; Max-Age=0');
+        const refreshToken = getCookie(ctx.req, 'rt');
+        
+        // ✅ Safe check: only call logout if token exists
+        if (refreshToken) {
+          await authCore.logout(db, refreshToken);
+        }
+        
+        // ✅ Path=/ नभए कुकी पूर्ण रुपमा डिलेट हुँदैन
+        ctx.res.setHeader('Set-Cookie', 'rt=; HttpOnly; Max-Age=0; Path=/; SameSite=Lax');
         return { success: true };
       } catch (err: any) {
         return { success: false, error: err.message };
@@ -185,7 +232,6 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
     },
   };
 
-  // ======= MIDDLEWARE =======
   const middleware = {
     requireAuth: async (ctx: any, next?: Function) => {
       await authCore.middleware()(ctx.req, ctx.res, next);
@@ -205,7 +251,6 @@ export const createDolphinAuthController = (db: any, authConfig: any) => {
     }
   };
 
-  // ======= UTILITIES =======
   const utilities = {
     sanitize: (user: any) => {
       if (!user) return null;

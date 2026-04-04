@@ -1,38 +1,45 @@
+// adapters/mongoose/index.test.ts
 import { createMongooseAdapter } from './index';
 
 describe('Mongoose Adapter', () => {
   let adapter: any;
   let mockModel: any;
+  let mockChainable: any;
 
   beforeEach(() => {
-    // Helper to create chainable mock for mongoose queries (generic)
-    const chainable = <T = any>(result?: T) => {
+    // Helper to create chainable mock for mongoose queries
+    const createChainable = (result?: any) => {
       const chain = {
         sort: jest.fn().mockReturnThis(),
         skip: jest.fn().mockReturnThis(),
         limit: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
-        lean: jest.fn().mockResolvedValue(result),
-        then: jest.fn().mockResolvedValue(result),
-        exec: jest.fn().mockResolvedValue(result),
+        where: jest.fn().mockReturnThis(),
+        populate: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockResolvedValue(result || []),
+        then: jest.fn().mockResolvedValue(result || []),
+        exec: jest.fn().mockResolvedValue(result || [])
       };
       return chain;
     };
 
+    mockChainable = createChainable();
+    
     mockModel = {
       create: jest.fn(),
-      find: jest.fn(() => chainable([])),
-      findOne: jest.fn(() => chainable(undefined)),
-      findById: jest.fn(() => chainable(undefined)),
-      findByIdAndUpdate: jest.fn(() => chainable(undefined)),
-      findByIdAndDelete: jest.fn(() => chainable(undefined)),
-      findOneAndUpdate: jest.fn(() => chainable(undefined)),
-      findOneAndDelete: jest.fn(() => chainable(undefined)),
-      updateMany: jest.fn(),
-      deleteMany: jest.fn(),
+      find: jest.fn(() => createChainable([])),
+      findOne: jest.fn(() => createChainable(null)),
+      findById: jest.fn(() => createChainable(null)),
+      findByIdAndUpdate: jest.fn(() => createChainable(null)),
+      findByIdAndDelete: jest.fn(() => createChainable(null)),
+      findOneAndUpdate: jest.fn(() => createChainable(null)),
+      findOneAndDelete: jest.fn(() => createChainable(null)),
+      updateMany: jest.fn().mockResolvedValue({ modifiedCount: 0 }),
+      deleteMany: jest.fn().mockResolvedValue({ deletedCount: 0 }),
       insertMany: jest.fn(),
-      deleteOne: jest.fn(),
+      deleteOne: jest.fn().mockResolvedValue({ deletedCount: 0 }),
       countDocuments: jest.fn().mockResolvedValue(0),
+      updateOne: jest.fn().mockResolvedValue({ modifiedCount: 0 })
     };
 
     adapter = createMongooseAdapter({
@@ -40,15 +47,18 @@ describe('Mongoose Adapter', () => {
       RefreshToken: mockModel,
       models: { test: mockModel },
       leanByDefault: true,
+      softDelete: false
     });
   });
 
   it('should map id to _id and $like in queries', async () => {
+    // Call read with id and $like query
     await adapter.read('test', { 
       id: '123', 
       name: { $like: 'john' } 
     });
 
+    // Verify find was called with converted query
     expect(mockModel.find).toHaveBeenCalledWith(
       expect.objectContaining({
         _id: '123',
@@ -99,13 +109,23 @@ describe('Mongoose Adapter', () => {
 
     expect(mockModel.findOneAndUpdate).toHaveBeenCalledWith(
       { _id: '123' },
-      expect.objectContaining({ name: 'Updated' }),
-      expect.objectContaining({ new: true })
+      expect.objectContaining({ name: 'Updated', updatedAt: expect.any(Date) }),
+      { new: true }
     );
     expect(result.id).toBe('123');
   });
 
   it('should support advancedRead with sort, offset and limit', async () => {
+    const mockDocs = [{ _id: '1', name: 'Test 1' }, { _id: '2', name: 'Test 2' }];
+    const mockFind = jest.fn().mockReturnValue({
+      sort: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockResolvedValue(mockDocs),
+      where: jest.fn().mockReturnThis()
+    });
+    mockModel.find = mockFind;
+
     await adapter.advancedRead('test', { status: 'active' }, {
       sort: { createdAt: 'desc' },
       offset: 10,
@@ -124,5 +144,43 @@ describe('Mongoose Adapter', () => {
 
     expect(adapter.User.collection).toBe('User');
     expect(adapter.test.collection).toBe('test');
+  });
+
+  // Additional test for read method with empty query
+  it('should handle read with empty query', async () => {
+    const mockDocs = [{ _id: '1', name: 'Test 1' }, { _id: '2', name: 'Test 2' }];
+    mockModel.find.mockReturnValueOnce({
+      lean: jest.fn().mockResolvedValue(mockDocs)
+    });
+
+    const results = await adapter.read('test', {});
+
+    expect(mockModel.find).toHaveBeenCalledWith({});
+    expect(results).toHaveLength(2);
+    expect(results[0]).toEqual({ id: '1', name: 'Test 1' });
+    expect(results[1]).toEqual({ id: '2', name: 'Test 2' });
+  });
+
+  // Test for update method (CRUD controller compatibility)
+  it('should support update method for CRUD controller', async () => {
+    mockModel.updateMany.mockResolvedValueOnce({ modifiedCount: 2 });
+
+    const result = await adapter.update('test', { category: 'Electronics' }, { price: 100 });
+
+    expect(mockModel.updateMany).toHaveBeenCalledWith(
+      { category: 'Electronics' },
+      expect.objectContaining({ price: 100, updatedAt: expect.any(Date) })
+    );
+    expect(result).toBe(2);
+  });
+
+  // Test for delete method (CRUD controller compatibility)
+  it('should support delete method for CRUD controller', async () => {
+    mockModel.deleteMany.mockResolvedValueOnce({ deletedCount: 3 });
+
+    const result = await adapter.delete('test', { category: 'Old' });
+
+    expect(mockModel.deleteMany).toHaveBeenCalledWith({ category: 'Old' });
+    expect(result).toBe(3);
   });
 });

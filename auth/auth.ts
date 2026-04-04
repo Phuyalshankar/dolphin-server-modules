@@ -315,10 +315,13 @@ export function createAuth(config: {
   cookieMaxAge?: number;
   issuer?: string;
   rateLimit?: { max: number; window: number };
+  secureCookies?: boolean;  // ✅ नयाँ config थपियो
 }) {
   const cookieMaxAge = config.cookieMaxAge || 7 * DAY;
   const issuer = config.issuer || 'App';
   const rateLimit = config.rateLimit || { max: 5, window: MS_PER_15MIN };
+  // ✅ secureCookies: development मा false, production मा true
+  const secureCookies = config.secureCookies ?? (process.env.NODE_ENV === 'production');
   
   // Rate limit store
   const rlStore = config.redisClient ? null : new SimpleLRU<string, { count: number }>(10000, rateLimit.window);
@@ -457,10 +460,11 @@ export function createAuth(config: {
         twoFactorVerified: twoFactorVerified === true
       });
       
+      // ✅ FIXED: secureCookies config प्रयोग गरियो
       if (res?.cookie) {
         res.cookie('rt', refreshToken, { 
           httpOnly: true, 
-          secure: process.env.NODE_ENV === 'production',
+          secure: secureCookies,  // ← यहाँ परिवर्तन
           maxAge: cookieMaxAge,
           sameSite: 'lax',
           path: '/'
@@ -573,10 +577,11 @@ export function createAuth(config: {
           twoFactorVerified: tokenData.twoFactorVerified === true
         }, config.secret);
         
+        // ✅ FIXED: secureCookies config प्रयोग गरियो
         if (res?.cookie) {
           res.cookie('rt', newRT, { 
             httpOnly: true, 
-            secure: process.env.NODE_ENV === 'production',
+            secure: secureCookies,  // ← यहाँ परिवर्तन
             maxAge: cookieMaxAge,
             sameSite: 'lax',
             path: '/'
@@ -656,59 +661,59 @@ export function createAuth(config: {
     
     // ✅ FIXED: Dolphin Server compatible middleware
     middleware(opts: { require2FA?: boolean } = {}) {
-  return async (req: any, res: any, next?: Function) => {
-    try {
-      // ✅ Safe headers access
-      const headers = req?.headers || req?.req?.headers || {};
-      const authHeader = headers?.authorization;
-      
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        if (res && typeof res.status === 'function') {
-          return res.status(401).json({ message: 'Unauthorized' });
-        }
-        const err: any = new Error('Unauthorized');
-        err.status = 401;
-        throw err;
-      }
+      return async (req: any, res: any, next?: Function) => {
+        try {
+          // ✅ Safe headers access
+          const headers = req?.headers || req?.req?.headers || {};
+          const authHeader = headers?.authorization;
+          
+          if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            if (res && typeof res.status === 'function') {
+              return res.status(401).json({ message: 'Unauthorized' });
+            }
+            const err: any = new Error('Unauthorized');
+            err.status = 401;
+            throw err;
+          }
 
-      const token = authHeader.substring(7);
-      let decoded;
-      
-      try {
-        decoded = await verifyJWT(token, config.secret);
-        req.user = decoded;
-      } catch (jwtErr) {
-        if (res && typeof res.status === 'function') {
-          return res.status(401).json({ message: 'Unauthorized' });
-        }
-        const err: any = new Error('Unauthorized');
-        err.status = 401;
-        throw err;
-      }
+          const token = authHeader.substring(7);
+          let decoded;
+          
+          try {
+            decoded = await verifyJWT(token, config.secret);
+            req.user = decoded;
+          } catch (jwtErr) {
+            if (res && typeof res.status === 'function') {
+              return res.status(401).json({ message: 'Unauthorized' });
+            }
+            const err: any = new Error('Unauthorized');
+            err.status = 401;
+            throw err;
+          }
 
-      if (opts.require2FA && decoded.twoFactorVerified !== true) {
-        if (res && typeof res.status === 'function') {
-          return res.status(403).json({ message: '2FA required' });
-        }
-        const err: any = new Error('2FA required');
-        err.status = 403;
-        throw err;
-      }
+          if (opts.require2FA && decoded.twoFactorVerified !== true) {
+            if (res && typeof res.status === 'function') {
+              return res.status(403).json({ message: '2FA required' });
+            }
+            const err: any = new Error('2FA required');
+            err.status = 403;
+            throw err;
+          }
 
-      // ✅ Fixed: Check if next exists and is a function
-      if (next && typeof next === 'function') {
-        next();
-      }
-      // For Dolphin Server, if next is not a function, just return
-      
-    } catch (err: any) {
-      if (res && typeof res.status === 'function') {
-        return res.status(err.status || 401).json({ message: err.message });
-      }
-      throw err;
-    }
-  };
-},
+          // ✅ Fixed: Check if next exists and is a function
+          if (next && typeof next === 'function') {
+            next();
+          }
+          // For Dolphin Server, if next is not a function, just return
+          
+        } catch (err: any) {
+          if (res && typeof res.status === 'function') {
+            return res.status(err.status || 401).json({ message: err.message });
+          }
+          throw err;
+        }
+      };
+    },
     
     verifyToken: (token: string) => verifyJWT(token, config.secret)
   };

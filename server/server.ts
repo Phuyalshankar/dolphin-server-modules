@@ -1,9 +1,11 @@
 import http from 'node:http';
+import { WebSocketServer } from 'ws';
 import { createDolphinRouter } from '../router/router';
 
-export function createDolphinServer(options: { port?: number; host?: string } = {}) {
+export function createDolphinServer(options: { port?: number; host?: string, realtime?: any } = {}) {
   const router = createDolphinRouter();
   const middlewares: any[] = [];
+  const wss = new WebSocketServer({ noServer: true });
 
   const server = http.createServer(async (req: any, res: any) => {
     // Store status for chaining
@@ -169,8 +171,39 @@ export function createDolphinServer(options: { port?: number; host?: string } = 
     }
   });
 
+  // --- WebSocket Upgrade Handling ---
+  server.on('upgrade', (request, socket, head) => {
+    const { pathname } = new URL(request.url!, `http://${request.headers.host}`);
+    
+    if (pathname === '/phone' || pathname === '/realtime') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    } else {
+      socket.destroy();
+    }
+  });
+
+  if (options.realtime) {
+    wss.on('connection', (ws, request) => {
+      // Automatic device extraction from URL or header (placeholder)
+      const deviceId = new URL(request.url!, `http://h`).searchParams.get('deviceId') || 'anonymous';
+      
+      options.realtime.register(deviceId, ws);
+      
+      ws.on('message', (data) => {
+        options.realtime.handle(data, ws, deviceId);
+      });
+
+      ws.on('close', () => options.realtime.unregister(deviceId));
+      ws.on('error', () => options.realtime.unregister(deviceId));
+    });
+  }
+
   return {
     ...router,
+    http: server,
+    wss,
     use: (prefixOrMw: string | any, mw?: any) => {
       if (typeof prefixOrMw === 'string' && mw && typeof mw.match === 'function') {
         router.use(prefixOrMw, mw);

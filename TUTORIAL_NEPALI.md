@@ -41,9 +41,9 @@ import { createDolphinServer } from 'dolphin-server-modules/server';
 
 const app = createDolphinServer();
 
-// एउटा सामान्य गेट (GET) रूट
+// एउटा सामान्य गेट (GET) रूट (v1.4.7: अब सिधै डाटा रिटर्न गर्न सकिन्छ!)
 app.get('/', (ctx) => {
-  ctx.json({ message: "Dolphin को संसारमा स्वागत छ! 🐬" });
+  return { message: "Dolphin को संसारमा स्वागत छ! 🐬" };
 });
 
 // सर्भर सुन्न (Listen) सुरु गर्नुहोस्
@@ -136,10 +136,10 @@ import { createAuth } from 'dolphin-server-modules/auth';
 
 const auth = createAuth({ secret: 'MY_SECRET_KEY' });
 
-// कुनै रूटलाई सुरक्षित बनाउन
-app.get('/profile', auth.middleware(), (ctx) => {
+// कुनै रूटलाई सुरक्षित बनाउन (v1.4.7: मिडलवेयर चेन सपोर्ट!)
+app.get('/profile', auth.requireAuth, async (ctx) => {
   // यहाँ पुगेको युजर भेरिफाई भइसकेको हुन्छ
-  ctx.json({ user: ctx.req.user });
+  return { user: ctx.req.user };
 });
 ```
 

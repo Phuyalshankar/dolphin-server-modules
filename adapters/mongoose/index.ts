@@ -1,3 +1,4 @@
+// mongoose-adapter.ts
 import type { Model } from 'mongoose';
 
 export interface MongooseAdapterConfig {
@@ -136,8 +137,8 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
       return mapDoc(doc);
     },
 
-    // Read many
-    async read(collection: string, query: any = {}, options: any = {}, userId?: string) {
+    // Read many (internal use)
+    async readMany(collection: string, query: any = {}, options: any = {}, userId?: string) {
       const Model = getModel(collection);
       const filter = mapQuery(query);
       if (userId) filter.userId = userId;
@@ -294,6 +295,80 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
     async exists(collection: string, filter: any = {}, userId?: string) {
       const count = await this.count(collection, filter, userId);
       return count > 0;
+    },
+
+    // ==================== CRUD CONTROLLER COMPATIBILITY METHODS (FIXED) ====================
+    
+    // Read method for CRUD controller - FIXED to use mapQuery
+    async read(collection: string, query: any = {}) {
+      // If query has id or _id, return single document in array
+      if (query.id || query._id) {
+        const id = query.id || query._id;
+        const result = await this.readOne(collection, id);
+        return result ? [result] : [];
+      }
+      
+      // Otherwise return all matching documents with mapQuery
+      const Model = getModel(collection);
+      
+      // IMPORTANT: Use mapQuery to convert id to _id and handle $like
+      const filter = mapQuery(query);
+      
+      // Auto exclude soft deleted if enabled
+      if (softDelete && filter[softDeleteField] === undefined) {
+        filter[softDeleteField] = null;
+      }
+      
+      const docs = await Model.find(filter).lean(leanByDefault);
+      return docs.map(mapDoc);
+    },
+    
+    // Update method for CRUD controller
+    async update(collection: string, query: any, data: any) {
+      // If updating by id
+      if (query.id || query._id) {
+        const id = query.id || query._id;
+        return await this.updateOne(collection, id, data);
+      }
+      
+      // Otherwise update many with mapQuery
+      const Model = getModel(collection);
+      const filter = mapQuery(query);
+      
+      if (softDelete && filter[softDeleteField] === undefined) {
+        filter[softDeleteField] = null;
+      }
+      
+      const result = await Model.updateMany(
+        filter,
+        { ...data, updatedAt: new Date() }
+      );
+      
+      return result.modifiedCount;
+    },
+    
+    // Delete method for CRUD controller
+    async delete(collection: string, query: any) {
+      // If deleting by id
+      if (query.id || query._id) {
+        const id = query.id || query._id;
+        return await this.deleteOne(collection, id);
+      }
+      
+      // Otherwise delete many with mapQuery
+      const Model = getModel(collection);
+      const filter = mapQuery(query);
+      
+      if (softDelete) {
+        const result = await Model.updateMany(
+          filter,
+          { [softDeleteField]: new Date(), updatedAt: new Date() }
+        );
+        return result.modifiedCount;
+      } else {
+        const result = await Model.deleteMany(filter);
+        return result.deletedCount;
+      }
     }
   };
 
