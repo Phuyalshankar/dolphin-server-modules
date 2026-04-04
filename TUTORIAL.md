@@ -1,120 +1,216 @@
-# Dolphin Framework Tutorial 🐬
+# Dolphin Framework Tutorial 🐬 (v1.5.5)
 
-Welcome to the official tutorial for the **Dolphin Framework**. This guide will take you from zero to a production-ready API using our native, high-performance modules.
+Welcome to the official tutorial for the **Dolphin Framework**. This guide will take you from zero to a production-ready API using native, high-performance modules.
 
 ---
 
 ## 1. Project Setup
-Create a new directory and initialize your project:
 ```bash
 mkdir my-dolphin-app && cd my-dolphin-app
 npm init -y
 npm install dolphin-server-modules mongoose zod
 ```
 
+TypeScript प्रयोग गर्दा:
+```bash
+npm install -D typescript ts-node @types/node
+```
+
 ---
 
 ## 2. Database Setup (Mongoose)
-Define your models using Mongoose:
+
 ```typescript
 // models.ts
 import mongoose from 'mongoose';
 
 const UserSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true }
+  email:    { type: String, required: true, unique: true },
+  password: { type: String, required: true },
 });
 
-export const User = mongoose.model('User', UserSchema);
+const RefreshTokenSchema = new mongoose.Schema({
+  token:  String,
+  userId: String,
+});
+
+const ProductSchema = new mongoose.Schema({
+  name:      String,
+  price:     Number,
+  category:  String,
+  createdAt: String,
+  updatedAt: String,
+});
+
+export const User         = mongoose.model('User', UserSchema);
+export const RefreshToken = mongoose.model('RefreshToken', RefreshTokenSchema);
+export const Product      = mongoose.model('Product', ProductSchema);
 ```
 
 ---
 
-## 3. Initialize Dolphin
-Create your main entry point and connect the components:
+## 3. Initialize Dolphin + Mongoose Adapter
+
 ```typescript
 // index.ts
+import mongoose from 'mongoose';
 import { createDolphinServer } from 'dolphin-server-modules/server';
 import { createMongooseAdapter } from 'dolphin-server-modules/adapters/mongoose';
-import { createAuth } from 'dolphin-server-modules/auth';
-import { User } from './models';
+import { createCRUD } from 'dolphin-server-modules/crud';
+import { User, RefreshToken, Product } from './models';
 
-// 1. Setup Adapter
-const db = createMongooseAdapter({ User });
+// 1. Connect MongoDB
+await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/mydb');
 
-// 2. Setup Auth
-const auth = createAuth({ secret: 'SUPER_SECRET' });
+// 2. Create Mongoose adapter
+const db = createMongooseAdapter({
+  User,
+  RefreshToken,
+  models: { Product },   // custom collections थप्नुहोस्
+  leanByDefault: true,
+  softDelete: false,
+});
 
-// 3. Setup Server
+// 3. Create CRUD service
+// ⚠️ Public API: enforceOwnership: false (auth middleware नचाहिने)
+// ⚠️ Protected API: enforceOwnership: true (auth middleware चाहिने)
+const crud = createCRUD(db, { enforceOwnership: false });
+
+// 4. Create server
 const app = createDolphinServer();
 ```
 
 ---
 
-## 4. Routing with Context (ctx)
-Dolphin uses a unified `ctx` object for ultra-clean handlers.
+## 4. CRUD Routes — Correct Mapping
 
 ```typescript
-// Simple Route (v1.4.7: Now supports Auto-JSON by returning objects!)
-app.get('/', (ctx) => {
-  return { message: "Welcome to Dolphin!" };
+// GET all products
+app.get('/products', async (ctx) => {
+  const { limit, offset, ...filters } = ctx.query;
+  const results = await crud.read('Product', filters, {
+    limit:  limit  ? parseInt(limit)  : undefined,
+    offset: offset ? parseInt(offset) : undefined,
+  });
+  ctx.json(results);
 });
 
-// Dynamic Route with Params
-app.get('/users/:id', (ctx) => {
-  const { id } = ctx.params;
-  ctx.json({ userId: id });
+// GET single product by ID
+app.get('/products/:id', async (ctx) => {
+  const result = await crud.readOne('Product', ctx.params.id);
+  if (!result) return ctx.status(404).json({ error: 'Not Found' });
+  ctx.json(result);
 });
 
-// Post Request with Body
-app.post('/echo', (ctx) => {
-  ctx.json({ youSent: ctx.body });
+// POST create product
+app.post('/products', async (ctx) => {
+  const result = await crud.create('Product', ctx.body);
+  ctx.status(201).json(result);
+});
+
+// PUT update product by ID
+app.put('/products/:id', async (ctx) => {
+  const result = await crud.updateOne('Product', ctx.params.id, ctx.body);
+  if (!result) return ctx.status(404).json({ error: 'Not Found' });
+  ctx.json(result);
+});
+
+// DELETE product by ID
+app.delete('/products/:id', async (ctx) => {
+  const result = await crud.deleteOne('Product', ctx.params.id);
+  if (!result) return ctx.status(404).json({ error: 'Not Found' });
+  ctx.json({ success: true, deleted: result });
 });
 ```
 
 ---
 
-## 5. Adding Authentication Middleware
-Secure your routes with the `auth` module:
+## 5. Authentication Middleware
 
 ```typescript
-// Protecting a route (v1.4.7: Chained Multi-Handler support!)
+import { createAuth } from 'dolphin-server-modules/auth';
+
+const auth = createAuth({ secret: process.env.JWT_SECRET || 'SUPER_SECRET' });
+
+// Protected route — auth middleware पहिले लगाउनुहोस्
 app.get('/profile', auth.requireAuth, async (ctx) => {
-  // ctx.req.user is automatically populated
-  return { user: ctx.req.user };
+  return { user: ctx.req.user }; // ctx.req.user automatically set हुन्छ
+});
+```
+
+`enforceOwnership: true` सँग प्रयोग गर्दा:
+```typescript
+const protectedCrud = createCRUD(db, { enforceOwnership: true });
+
+// Auth middleware ले ctx.req.user.id set गर्नुपर्छ — नत्र सबै खाली फर्काउँछ
+app.get('/my-orders', auth.requireAuth, async (ctx) => {
+  const orders = await protectedCrud.read('Order', {}, {}, ctx.req.user.id);
+  ctx.json(orders);
 });
 ```
 
 ---
 
-## 6. Global Middleware (Universal Support)
-Dolphin is unique because it supports both native Context-based and standard Express-based middlewares.
+## 6. Global Middleware
 
 ```typescript
-// 1. Dolphin Context Style
+// Dolphin Context Style
 app.use((ctx, next) => {
   console.log(`${ctx.req.method} ${ctx.req.url}`);
   next();
 });
 
-// 2. Standard Express Style (CORS, Helmet, etc.)
+// Standard Express Style (cors, helmet, etc.)
 import cors from 'cors';
-app.use(cors()); // No wrapper needed!
+app.use(cors()); // Express middleware directly काम गर्छ!
 ```
 
 ---
 
-## 7. Starting the Server
+## 7. Zod Validation Middleware
+
 ```typescript
-app.listen(3000, () => {
-  console.log("Dolphin is swimming on http://localhost:3000 🐬");
+import { zodMiddleware } from 'dolphin-server-modules/middleware/zod';
+import { z } from 'zod';
+
+const ProductSchema = z.object({
+  name:  z.string().min(1),
+  price: z.number().positive(),
+});
+
+app.post('/products', zodMiddleware(ProductSchema), async (ctx) => {
+  // ctx.body is now validated and typed
+  const result = await crud.create('Product', ctx.body);
+  ctx.status(201).json(result);
 });
 ```
 
 ---
 
-## 8. Realtime & IoT Integration [NEW]
-Dolphin now supports high-performance realtime communication:
+## 8. Sub-Routing (Large Apps)
+
+```typescript
+import { createDolphinRouter } from 'dolphin-server-modules/router';
+
+// authRoutes.ts
+const authRouter = createDolphinRouter();
+authRouter.post('/login',    (ctx) => ctx.json({ msg: 'Login OK' }));
+authRouter.post('/register', (ctx) => ctx.json({ msg: 'Registered' }));
+
+// productRoutes.ts
+const productRouter = createDolphinRouter();
+productRouter.get('/',    async (ctx) => ctx.json(await crud.read('Product')));
+productRouter.post('/',   async (ctx) => ctx.status(201).json(await crud.create('Product', ctx.body)));
+
+// index.ts — prefix सँग mount
+app.use('/auth',     authRouter);
+app.use('/products', productRouter);
+// Routes: /auth/login, /auth/register, /products/, /products/ (POST)
+```
+
+---
+
+## 9. Realtime & IoT Integration
 
 ```typescript
 import { RealtimeCore, JSONPlugin } from 'dolphin-server-modules/realtime';
@@ -133,26 +229,72 @@ rt.publish('sensors/temp', { value: 24.5 });
 
 ---
 
-## 9. Independent Routing [NEW]
-Organize your application by separating routes into different files:
+## 10. Starting the Server
 
 ```typescript
-// authRoutes.ts
-import { createDolphinRouter } from 'dolphin-server-modules/router';
-export const authRouter = createDolphinRouter();
-
-authRouter.get('/login', (ctx) => ctx.json({ msg: 'Logged in' }));
-
-// index.ts
-import { authRouter } from './authRoutes';
-app.use('/auth', authRouter); // Routes are now at /auth/login
+const PORT = process.env.PORT || 3000;
+app.listen(Number(PORT), () => {
+  console.log(`🐬 Dolphin swimming on http://0.0.0.0:${PORT}`);
+});
 ```
 
 ---
 
-## 🚀 Performance Tips
-- Use **Context (ctx)** directly for JSON responses.
-- Keep your routes organized using prefixing (coming in v1.1.0).
-- Use the **Zod Middleware** for automatic type-safe validation.
+## 11. Testing with Real Mongoose (v1.5.5)
 
-Happy Coding!
+Production-safe testing को लागि `mongodb-memory-server` प्रयोग गर्नुहोस्:
+
+```bash
+npm install -D mongodb-memory-server
+```
+
+```typescript
+// product.test.ts
+import mongoose from 'mongoose';
+import { MongoMemoryServer } from 'mongodb-memory-server';
+import { createMongooseAdapter } from 'dolphin-server-modules/adapters/mongoose';
+import { createCRUD } from 'dolphin-server-modules/crud';
+
+let mongod: MongoMemoryServer;
+
+beforeAll(async () => {
+  mongod = await MongoMemoryServer.create();
+  await mongoose.connect(mongod.getUri());
+});
+
+afterAll(async () => {
+  await mongoose.disconnect();
+  await mongod.stop();
+});
+
+test('product CRUD', async () => {
+  const db   = createMongooseAdapter({ User, RefreshToken, models: { Product } });
+  const crud = createCRUD(db, { enforceOwnership: false });
+
+  const created = await crud.create('Product', { name: 'Laptop', price: 1200 });
+  expect(created.id).toBeDefined();
+
+  const found = await crud.readOne('Product', created.id);
+  expect(found?.name).toBe('Laptop');
+});
+```
+
+---
+
+## ⚠️ Common Mistakes
+
+| Mistake | Fix |
+| :--- | :--- |
+| CRUD returns empty without auth | `enforceOwnership: false` set गर्नुहोस् |
+| `getOne` always returns first item | Adapter को `read()` ले query filter गर्नुपर्छ — Mongoose adapter ले automatically गर्छ |
+| `{ new: true }` deprecation warning | Mongoose adapter v1.5.5 मा `{ returnDocument: 'after' }` मा fix भएको छ |
+
+---
+
+## 🚀 Performance Tips
+- `ctx.json()` directly call गर्नुहोस् — auto-serialization built-in छ।
+- Routes लाई sub-routers मा organize गर्नुहोस्।
+- `leanByDefault: true` (default) — Mongoose queries faster हुन्छन्।
+- Production मा `enforceOwnership: true` र proper auth middleware राख्नुहोस्।
+
+Happy Coding! 🐬
