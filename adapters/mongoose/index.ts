@@ -299,26 +299,18 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
 
     // ==================== CRUD CONTROLLER COMPATIBILITY METHODS (FIXED) ====================
     
-    // Read method for CRUD controller - FIXED to use mapQuery
+    // Read method for CRUD controller
     async read(collection: string, query: any = {}) {
-      // If query has id or _id, return single document in array
-      if (query.id || query._id) {
-        const id = query.id || query._id;
-        const result = await this.readOne(collection, id);
-        return result ? [result] : [];
-      }
-      
-      // Otherwise return all matching documents with mapQuery
       const Model = getModel(collection);
-      
-      // IMPORTANT: Use mapQuery to convert id to _id and handle $like
+
+      // mapQuery converts id→_id and $like→$regex across the whole query
       const filter = mapQuery(query);
-      
+
       // Auto exclude soft deleted if enabled
       if (softDelete && filter[softDeleteField] === undefined) {
         filter[softDeleteField] = null;
       }
-      
+
       const docs = await Model.find(filter).lean(leanByDefault);
       return docs.map(mapDoc);
     },
