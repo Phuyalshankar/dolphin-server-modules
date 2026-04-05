@@ -194,8 +194,13 @@ export class RealtimeCore extends EventEmitter {
 
     this.trie.add(topic, fn);
 
+    // BUG FIX #1: Use TopicTrie matching for retained messages instead of exact string compare.
+    // Previously `t === topic` only matched exact topics, breaking wildcard subscriptions like
+    // 'sensors/+' or 'sensors/#' which would never receive retained messages.
     for (const [t, data] of this.retained.entries()) {
-      if (t === topic) fn(data.payload);
+      const tempTrie = new TopicTrie();
+      tempTrie.add(topic, fn);
+      tempTrie.match(t, (matchedFn: Function) => matchedFn(data.payload));
     }
   }
 
@@ -702,14 +707,62 @@ export class RealtimeCore extends EventEmitter {
           payload = parsed.payload;
         }
       } catch (e) {
-        const decoded = djson(raw);
-        if (decoded && typeof decoded === 'object') {
-          if (decoded.type === 'pub' && decoded.topic) {
-            topic = decoded.topic;
-            payload = decoded.payload;
-          } else if (decoded.topic) {
-            topic = decoded.topic;
-            payload = decoded.payload;
+        // BUG FIX #2: When raw JSON parse fails, the message may be base64 or hex encoded.
+        // djson(Buffer) bypasses autoDetect for Buffer inputs and returns { raw: '...' } without
+        // trying base64/hex decode. So we must manually detect and decode base64/hex here.
+        let innerStr: string | null = null;
+
+        // Try base64 decode: rawStr must match base64 char set and be length % 4 === 0
+        if (/^[A-Za-z0-9+/=]+$/.test(rawStr) && rawStr.length % 4 === 0) {
+          try {
+            const b64Decoded = Buffer.from(rawStr, 'base64').toString('utf8');
+            if (b64Decoded.includes('{')) {
+              innerStr = b64Decoded;
+            }
+          } catch {
+            // not base64
+          }
+        }
+
+        // Try hex decode: rawStr must be even-length hex chars only
+        if (!innerStr && /^[0-9a-fA-F]+$/.test(rawStr) && rawStr.length % 2 === 0) {
+          try {
+            const hexDecoded = Buffer.from(rawStr, 'hex').toString('utf8');
+            if (hexDecoded.includes('{')) {
+              innerStr = hexDecoded;
+            }
+          } catch {
+            // not hex
+          }
+        }
+
+        // If we successfully decoded, try to parse the inner JSON
+        if (innerStr) {
+          try {
+            const inner = JSON.parse(innerStr);
+            if (inner.type === 'pub' && inner.topic) {
+              topic = inner.topic;
+              payload = inner.payload;
+            } else if (inner.topic) {
+              topic = inner.topic;
+              payload = inner.payload;
+            }
+          } catch {
+            // inner JSON parse failed
+          }
+        }
+
+        // Fallback: try djson for other custom formats
+        if (!topic) {
+          const decoded = djson(rawStr);
+          if (decoded && typeof decoded === 'object') {
+            if (decoded.type === 'pub' && decoded.topic) {
+              topic = decoded.topic;
+              payload = decoded.payload;
+            } else if (decoded.topic) {
+              topic = decoded.topic;
+              payload = decoded.payload;
+            }
           }
         }
       }
