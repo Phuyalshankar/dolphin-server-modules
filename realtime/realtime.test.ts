@@ -36,7 +36,7 @@ describe('Realtime Module v2 - Tests', () => {
     // Create a test file for file transfer tests
     testFileId = 'test-file-001';
     testFilePath = path.join(__dirname, 'test-temp-file.bin');
-    const testData = Buffer.alloc(1024 * 100, 'A'); // 100KB test file
+    const testData = Buffer.alloc(1024 * 500, 'A'); // 500KB test file (needs 8 chunks of 64KB to allow chunk index 6 resume test)
     fs.writeFileSync(testFilePath, testData);
   });
 
@@ -212,7 +212,7 @@ describe('Realtime Module v2 - Tests', () => {
       
       expect(metadata).not.toBeNull();
       expect(metadata?.name).toBe('test-temp-file.bin');
-      expect(metadata?.size).toBe(1024 * 100);
+      expect(metadata?.size).toBe(1024 * 500);
       expect(metadata?.totalChunks).toBeGreaterThan(0);
     });
 
@@ -227,7 +227,7 @@ describe('Realtime Module v2 - Tests', () => {
       
       const info = realtime.getFileInfo(fileId);
       expect(info).toBeDefined();
-      expect(info?.size).toBe(1024 * 100);
+      expect(info?.size).toBe(1024 * 500);
     });
 
     it('should list all available files', () => {
