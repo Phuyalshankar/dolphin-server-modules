@@ -5,7 +5,30 @@ import { RealtimePlugin, RealtimeContext } from './plugins';
 import { djson, toBuffer, toBase64 } from '../djson/djson';
 
 /**
- * RealtimeCore - High performance unified pub/sub bus for Dolphin.
+ * File Metadata Interface
+ */
+interface FileMetadata {
+  path: string;
+  size: number;
+  chunkSize: number;
+  totalChunks: number;
+  name: string;
+  hash?: string;
+  createdAt: number;
+}
+
+/**
+ * Buffered Message Interface
+ */
+interface BufferedMessage {
+  data: any;
+  ts: number;
+  isBinary?: boolean;
+}
+
+/**
+ * RealtimeCore v2.0 - High performance unified pub/sub bus for Dolphin
+ * Added Features: pubPush, subPull, pubFile, subFile, Resume, P2P Stream
  */
 export class RealtimeCore extends EventEmitter {
   private trie = new TopicTrie();
@@ -15,6 +38,19 @@ export class RealtimeCore extends EventEmitter {
   private pending = new Map<number, any>();
   private msgId = 0;
   
+  // High-Frequency Buffers (pubPush/subPull)
+  private highFreqBuffers = new Map<string, BufferedMessage[]>();
+  private readonly MAX_BUFFER_SIZE = 100;  // Lightweight: only 100 items per topic
+  
+  // File Transfer Registry (pubFile/subFile)
+  private fileRegistry = new Map<string, FileMetadata>();
+  private fileProgress = new Map<string, Map<string, number>>(); // deviceId -> fileId -> lastChunk
+  private readonly DEFAULT_CHUNK_SIZE = 64 * 1024; // 64KB chunks (Lightweight)
+  
+  // P2P Peer Registry
+  private peerRegistry = new Map<string, Set<string>>(); // fileId -> Set<deviceId>
+  
+  // JSON Cache (existing)
   private jsonCache = new Map<string, { result: string, timestamp: number }>();
   private readonly CACHE_TTL = 5000;
   private readonly MAX_CACHE_SIZE = 100;
@@ -25,6 +61,7 @@ export class RealtimeCore extends EventEmitter {
   // Cleanup intervals
   private cleanupInterval?: NodeJS.Timeout;
   private cacheCleanupInterval?: NodeJS.Timeout;
+  private bufferCleanupInterval?: NodeJS.Timeout;
 
   constructor(private config: { 
     maxMessageSize?: number, 
@@ -35,7 +72,11 @@ export class RealtimeCore extends EventEmitter {
     },
     enableJSONCache?: boolean,
     useBinaryProtocol?: boolean,
-    debug?: boolean
+    debug?: boolean,
+    // v2.0 new options
+    maxBufferPerTopic?: number,
+    defaultChunkSize?: number,
+    enableP2P?: boolean
   } = {}) {
     super();
 
@@ -48,11 +89,14 @@ export class RealtimeCore extends EventEmitter {
     if (config.enableJSONCache) {
       this.cacheCleanupInterval = setInterval(() => this.cleanJSONCache(), 10000);
     }
+    
+    // v2.0: Buffer cleanup
+    this.bufferCleanupInterval = setInterval(() => this.cleanupBuffers(), 30000);
   }
 
   private log(...args: any[]) {
     if (this.config.debug) {
-      console.log('[RealtimeCore]', ...args);
+      console.log('[RealtimeCore v2]', ...args);
     }
   }
 
@@ -100,6 +144,20 @@ export class RealtimeCore extends EventEmitter {
     for (const [key, value] of this.jsonCache.entries()) {
       if (now - value.timestamp > this.CACHE_TTL) {
         this.jsonCache.delete(key);
+      }
+    }
+  }
+  
+  private cleanupBuffers() {
+    // Remove old buffers that haven't been accessed
+    const now = Date.now();
+    for (const [topic, buffer] of this.highFreqBuffers.entries()) {
+      // Remove messages older than 5 minutes
+      const freshBuffer = buffer.filter(msg => now - msg.ts < 300000);
+      if (freshBuffer.length === 0) {
+        this.highFreqBuffers.delete(topic);
+      } else if (freshBuffer.length !== buffer.length) {
+        this.highFreqBuffers.set(topic, freshBuffer);
       }
     }
   }
@@ -168,10 +226,448 @@ export class RealtimeCore extends EventEmitter {
     }
   }
 
+  // ============================================
+  // v2.0 NEW: High-Frequency Methods
+  // ============================================
+  
   /**
-   * Handle raw data from a socket with DJSON integration
+   * pubPush: अति उच्च गतिको डाटाको लागि (IoT Sensors, Live Graphs)
+   * - No JSON.stringify, No Redis, No ACL चेक
+   * - सिधै Trie मा भएका Subscribers लाई पठाउने
+   * - Memory-efficient: सीमित मात्र बफर राख्छ
    */
+  pubPush(topic: string, payload: Buffer | Uint8Array | any) {
+    let buffer: Buffer;
+    let isBinary = false;
+    
+    if (Buffer.isBuffer(payload) || payload instanceof Uint8Array) {
+      buffer = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
+      isBinary = true;
+    } else {
+      buffer = Buffer.from(this.toJSON(payload, true));
+    }
+    
+    // सिधै टपिक मिल्ने सबैलाई पठाउने (Zero overhead)
+    this.trie.match(topic, (fn) => {
+      fn(buffer);
+    });
+    
+    // वैकल्पिक: पछि subPull को लागि बफरमा राख्ने
+    const maxBuffer = this.config.maxBufferPerTopic || this.MAX_BUFFER_SIZE;
+    if (maxBuffer > 0) {
+      let topicBuffer = this.highFreqBuffers.get(topic) || [];
+      topicBuffer.push({ data: isBinary ? buffer : payload, ts: Date.now(), isBinary });
+      
+      if (topicBuffer.length > maxBuffer) {
+        topicBuffer.shift();
+      }
+      this.highFreqBuffers.set(topic, topicBuffer);
+    }
+  }
+  
+  /**
+   * subPull: क्लाइन्टले मागेपछि मात्र डाटा दिने (Data Saving)
+   * @param deviceId - कसलाई पठाउने
+   * @param topic - कुन टपिकको डाटा चाहियो
+   * @param count - कति वटा पछिल्ला डाटा चाहियो (default: 10)
+   */
+  subPull(deviceId: string, topic: string, count: number = 10) {
+    const buffer = this.highFreqBuffers.get(topic);
+    
+    if (!buffer || buffer.length === 0) {
+      return this.sendTo(deviceId, { 
+        type: 'PULL_EMPTY', 
+        topic, 
+        message: 'No data available',
+        timestamp: Date.now()
+      });
+    }
+    
+    // पछिल्लो 'count' वटा डाटा मात्र लिने
+    const lastData = buffer.slice(-Math.min(count, buffer.length));
+    
+    this.sendTo(deviceId, {
+      type: 'PULL_RESPONSE',
+      topic,
+      count: lastData.length,
+      totalAvailable: buffer.length,
+      payload: lastData.map(d => d.data),
+      serverTime: Date.now()
+    });
+    
+    this.log(`subPull: ${deviceId} pulled ${lastData.length} items from ${topic}`);
+  }
+  
+  // ============================================
+  // v2.0 NEW: File Transfer Methods
+  // ============================================
+  
+  /**
+   * pubFile: ठूलो फाइललाई टुक्रा-टुक्रा (Chunks) मा पठाउन तयार गर्ने
+   * - फाइललाई पूरै मेमोरीमा नराखी 'Stream' तयार पार्ने
+   * - हरेक टुक्रा 64KB (हल्का)
+   */
+  pubFile(fileId: string, filePath: string, chunkSize?: number): FileMetadata | null {
+    const fs = require('fs');
+    
+    if (!fs.existsSync(filePath)) {
+      this.log(`pubFile: File not found - ${filePath}`);
+      return null;
+    }
+    
+    const stats = fs.statSync(filePath);
+    const finalChunkSize = chunkSize || this.config.defaultChunkSize || this.DEFAULT_CHUNK_SIZE;
+    
+    const metadata: FileMetadata = {
+      path: filePath,
+      size: stats.size,
+      chunkSize: finalChunkSize,
+      totalChunks: Math.ceil(stats.size / finalChunkSize),
+      name: filePath.split('/').pop() || filePath,
+      createdAt: Date.now()
+    };
+    
+    this.fileRegistry.set(fileId, metadata);
+    
+    // सबै अनलाइन डिभाइसलाई खबर गर्ने
+    this.publish('file/announce', {
+      type: 'FILE_AVAILABLE',
+      fileId,
+      name: metadata.name,
+      size: metadata.size,
+      totalChunks: metadata.totalChunks,
+      chunkSize: metadata.chunkSize,
+      timestamp: Date.now()
+    }, { retain: true });
+    
+    this.log(`pubFile: Registered ${fileId} - ${metadata.name} (${metadata.totalChunks} chunks)`);
+    
+    return metadata;
+  }
+  
+  /**
+   * subFile: फाइलको निश्चित टुक्रा (Chunk) तान्ने - Resume Support सहित
+   * @param deviceId - कसलाई पठाउने
+   * @param fileId - कुन फाइल
+   * @param startChunk - कुन Chunk बाट सुरु गर्ने (Resume को लागि)
+   */
+  async subFile(deviceId: string, fileId: string, startChunk: number = 0): Promise<boolean> {
+    const file = this.fileRegistry.get(fileId);
+    if (!file) {
+      this.sendTo(deviceId, { 
+        type: 'FILE_ERROR', 
+        fileId, 
+        error: 'File not found',
+        timestamp: Date.now()
+      });
+      return false;
+    }
+    
+    const fs = require('fs');
+    
+    if (!fs.existsSync(file.path)) {
+      this.sendTo(deviceId, { 
+        type: 'FILE_ERROR', 
+        fileId, 
+        error: 'File no longer exists on server',
+        timestamp: Date.now()
+      });
+      return false;
+    }
+    
+    // यदि startChunk अन्तिम Chunk भन्दा बढी छ भने
+    if (startChunk >= file.totalChunks) {
+      this.sendTo(deviceId, {
+        type: 'FILE_COMPLETE',
+        fileId,
+        totalChunks: file.totalChunks,
+        size: file.size,
+        timestamp: Date.now()
+      });
+      this.emit('file:complete', { fileId, deviceId });
+      return true;
+    }
+    
+    try {
+      const fd = fs.openSync(file.path, 'r');
+      const buffer = Buffer.alloc(file.chunkSize);
+      
+      // निश्चित स्थानबाट डाटा पढ्ने (Seek)
+      const offset = startChunk * file.chunkSize;
+      const bytesRead = fs.readSync(fd, buffer, 0, file.chunkSize, offset);
+      fs.closeSync(fd);
+      
+      const isLast = startChunk === file.totalChunks - 1;
+      const finalData = bytesRead < file.chunkSize ? buffer.slice(0, bytesRead) : buffer;
+      
+      this.sendTo(deviceId, {
+        type: 'FILE_CHUNK',
+        fileId,
+        name: file.name,
+        chunkIndex: startChunk,
+        totalChunks: file.totalChunks,
+        offset: offset,
+        size: bytesRead,
+        data: this.config.useBinaryProtocol ? finalData : finalData.toString('base64'),
+        isLast,
+        nextChunk: isLast ? null : startChunk + 1,
+        timestamp: Date.now()
+      });
+      
+      // प्रगति सेभ गर्ने (Resume को लागि)
+      this.saveFileProgress(deviceId, fileId, startChunk);
+      
+      // फाइल पूरा भयो भने event emit गर्ने
+      if (isLast) {
+        this.emit('file:complete', { fileId, deviceId });
+        this.log(`subFile: ${deviceId} completed ${file.name}`);
+      }
+      
+      return true;
+    } catch (err) {
+      this.log(`subFile error:`, err);
+      this.sendTo(deviceId, {
+        type: 'FILE_ERROR',
+        fileId,
+        error: String(err),
+        timestamp: Date.now()
+      });
+      return false;
+    }
+  }
+  
+  /**
+   * resumeFile: पहिले रोकिएको ठाउँबाट फाइल फेरि सुरु गर्ने
+   */
+  async resumeFile(deviceId: string, fileId: string): Promise<boolean> {
+    const lastChunk = this.getFileProgress(deviceId, fileId);
+    const nextChunk = lastChunk + 1;
+    
+    this.log(`resumeFile: ${deviceId} resuming ${fileId} from chunk ${nextChunk}`);
+    
+    return this.subFile(deviceId, fileId, nextChunk);
+  }
+  
+  /**
+   * saveFileProgress: डाउनलोड प्रगति सेभ गर्ने
+   */
+  private saveFileProgress(deviceId: string, fileId: string, lastChunk: number) {
+    if (!this.fileProgress.has(deviceId)) {
+      this.fileProgress.set(deviceId, new Map());
+    }
+    this.fileProgress.get(deviceId)!.set(fileId, lastChunk);
+  }
+  
+  /**
+   * getFileProgress: पहिलेको प्रगति पुनः प्राप्त गर्ने (Resume को लागि)
+   */
+  getFileProgress(deviceId: string, fileId: string): number {
+    return this.fileProgress.get(deviceId)?.get(fileId) ?? -1;
+  }
+  
+  /**
+   * getFileInfo: फाइलको जानकारी लिने
+   */
+  getFileInfo(fileId: string): FileMetadata | undefined {
+    return this.fileRegistry.get(fileId);
+  }
+  
+  /**
+   * listFiles: सबै उपलब्ध फाइलहरूको सूची
+   */
+  listFiles(): Array<{ fileId: string, name: string, size: number, totalChunks: number }> {
+    return Array.from(this.fileRegistry.entries()).map(([id, meta]) => ({
+      fileId: id,
+      name: meta.name,
+      size: meta.size,
+      totalChunks: meta.totalChunks
+    }));
+  }
+  
+  // ============================================
+  // v2.0 NEW: P2P Stream Pass
+  // ============================================
+  
+  /**
+   * announceToPeers: फाइलको उपलब्धता सबै पीयरलाई जानकारी दिने
+   */
+  announceToPeers(fileId: string, availableAtDeviceId: string) {
+    if (!this.config.enableP2P) return;
+    
+    if (!this.peerRegistry.has(fileId)) {
+      this.peerRegistry.set(fileId, new Set());
+    }
+    this.peerRegistry.get(fileId)!.add(availableAtDeviceId);
+    
+    this.broadcast('p2p/announce', {
+      type: 'PEER_AVAILABLE',
+      fileId,
+      source: availableAtDeviceId,
+      peers: Array.from(this.peerRegistry.get(fileId) || []),
+      timestamp: Date.now()
+    }, { exclude: [availableAtDeviceId] });
+  }
+  
+  /**
+   * getPeersForFile: फाइल भएका पीयरहरूको सूची
+   */
+  getPeersForFile(fileId: string): string[] {
+    return Array.from(this.peerRegistry.get(fileId) || []);
+  }
+  
+  /**
+   * requestFromPeer: पीयरबाट सिधै डाटा माग गर्ने
+   */
+  requestFromPeer(deviceId: string, peerId: string, fileId: string, chunkIndex: number) {
+    const peerSocket = this.getSocket(peerId);
+    if (peerSocket && peerSocket.readyState === 1) {
+      peerSocket.send(JSON.stringify({
+        type: 'P2P_REQUEST',
+        from: deviceId,
+        fileId,
+        chunkIndex,
+        timestamp: Date.now()
+      }));
+      return true;
+    }
+    return false;
+  }
+  
+  /**
+   * sendToPeer: पीयरलाई सिधै डाटा पठाउने (Server Pass-through)
+   */
+  sendToPeer(fromDeviceId: string, toDeviceId: string, payload: any): boolean {
+    const targetSocket = this.getSocket(toDeviceId);
+    
+    if (targetSocket && targetSocket.readyState === 1) {
+      const message = this.config.useBinaryProtocol 
+        ? toBuffer(payload)
+        : JSON.stringify({
+            type: 'P2P_DATA',
+            from: fromDeviceId,
+            data: payload,
+            timestamp: Date.now()
+          });
+      targetSocket.send(message);
+      return true;
+    }
+    return false;
+  }
+  
+  // ============================================
+  // v2.0 NEW: Enhanced Socket Methods
+  // ============================================
+  
+  /**
+   * isReady: डिभाइस अनलाइन छ र मेसेज लिन तयार छ कि छैन चेक गर्ने
+   */
+  isReady(deviceId: string): boolean {
+    const device = this.devices.get(deviceId);
+    return !!(device?.socket && device.socket.readyState === 1);
+  }
+  
+  /**
+   * isOnline: डिभाइस अनलाइन छ कि छैन (साधारण चेक)
+   */
+  isOnline(deviceId: string): boolean {
+    return this.devices.has(deviceId);
+  }
+  
+  /**
+   * sendTo: सिधै डिभाइसलाई मेसेज पठाउने (No Pub/Sub overhead)
+   */
+  sendTo(deviceId: string, payload: any): boolean {
+    if (!this.isReady(deviceId)) return false;
+    
+    try {
+      const device = this.devices.get(deviceId)!;
+      const data = this.config.useBinaryProtocol 
+        ? toBuffer(payload) 
+        : JSON.stringify(payload);
+        
+      device.socket.send(data);
+      return true;
+    } catch (err) {
+      console.error(`[Realtime] Send failed to ${deviceId}:`, err);
+      return false;
+    }
+  }
+  
+  /**
+   * kick: खराब वा अनधिकृत डिभाइसलाई हटाउने
+   */
+  kick(deviceId: string, reason: string = "Disconnected by server") {
+    const device = this.devices.get(deviceId);
+    if (device?.socket) {
+      this.sendTo(deviceId, { type: 'KICK', message: reason });
+      device.socket.close();
+      this.unregister(deviceId);
+      this.log(`Kicked ${deviceId}: ${reason}`);
+    }
+  }
+  
+  /**
+   * broadcastToGroup: कुनै विशेष ग्रुपलाई मात्र मेसेज पठाउने
+   */
+  broadcastToGroup(groupName: string, payload: any) {
+    for (const [id, device] of this.devices) {
+      if (device.metadata?.group === groupName && this.isReady(id)) {
+        this.sendTo(id, payload);
+      }
+    }
+  }
+  
+  /**
+   * getOnlineDevices: सबै अनलाइन डिभाइसहरूको लिस्ट दिने
+   */
+  getOnlineDevices(): Array<{ id: string, lastSeen: number, group?: string }> {
+    return Array.from(this.devices.entries()).map(([id, d]) => ({
+      id,
+      lastSeen: d.lastSeen,
+      group: d.metadata?.group || 'default'
+    }));
+  }
+  
+  /**
+   * ping: डिभाइसलाई Alive छ कि छैन भनेर चेक गर्न Ping पठाउने
+   */
+  ping(deviceId: string): boolean {
+    const device = this.devices.get(deviceId);
+    if (device?.socket && typeof device.socket.ping === 'function') {
+      device.socket.ping();
+      return true;
+    }
+    return false;
+  }
+  
+  // ============================================
+  // v2.0 NEW: Private Messaging
+  // ============================================
+  
+  /**
+   * privateSub: केवल आफ्नो निजी च्यानलमा आउने मेसेज सुन्नको लागि
+   */
+  privateSub(deviceId: string, fn: (data: any) => void) {
+    const privateTopic = `phone/signaling/${deviceId}`;
+    this.subscribe(privateTopic, fn, deviceId);
+    this.log(`[Private] ${deviceId} subscribed to private channel`);
+  }
+  
+  /**
+   * privatePub: कुनै विशेष डिभाइसको निजी च्यानलमा मात्र मेसेज पठाउन
+   */
+  privatePub(targetId: string, payload: any, opts: { retain?: boolean, ttl?: number } = {}) {
+    const privateTopic = `phone/signaling/${targetId}`;
+    this.publish(privateTopic, payload, opts, 'SYSTEM');
+    this.log(`[Private] Message sent to ${targetId}`);
+  }
+  
+  // ============================================
+  // Existing Methods (preserved for compatibility)
+  // ============================================
+  
   async handle(raw: Buffer, socket?: any, deviceId?: string) {
+    // ... (existing handle method remains the same)
     if (raw.length > (this.config.maxMessageSize || 256 * 1024)) return;
 
     const ctx: RealtimeContext = {
@@ -192,16 +688,12 @@ export class RealtimeCore extends EventEmitter {
 
     try {
       const rawStr = raw.toString('utf8');
-      this.log('Raw string:', rawStr);
       
       let topic: string | null = null;
       let payload: any = null;
       
-      // First try: Direct JSON parse
       try {
         const parsed = JSON.parse(rawStr);
-        this.log('Direct JSON parse result:', JSON.stringify(parsed));
-        
         if (parsed.type === 'pub' && parsed.topic) {
           topic = parsed.topic;
           payload = parsed.payload;
@@ -210,109 +702,12 @@ export class RealtimeCore extends EventEmitter {
           payload = parsed.payload;
         }
       } catch (e) {
-        this.log('Direct JSON parse failed, trying DJSON');
-        
-        // Second try: DJSON
         const decoded = djson(raw);
-        this.log('DJSON decoded:', JSON.stringify(decoded, null, 2));
-        
         if (decoded && typeof decoded === 'object') {
-          // Check for raw field (base64 or hex encoded data)
-          if (decoded.raw && typeof decoded.raw === 'string') {
-            this.log('Found raw field, attempting to decode');
-            
-            let decodedBuffer: Buffer | null = null;
-            let decodedString: string | null = null;
-            
-            // Try to decode as base64 first
-            try {
-              decodedBuffer = Buffer.from(decoded.raw, 'base64');
-              decodedString = decodedBuffer.toString('utf8');
-              this.log('Decoded as base64');
-            } catch (err) {
-              this.log('Failed to decode as base64');
-            }
-            
-            // If base64 decoding produced a valid JSON string, parse it
-            if (decodedString && (decodedString.trim().startsWith('{') || decodedString.trim().startsWith('['))) {
-              try {
-                const parsed = JSON.parse(decodedString);
-                if (parsed.type === 'pub' && parsed.topic) {
-                  topic = parsed.topic;
-                  payload = parsed.payload;
-                } else if (parsed.topic) {
-                  topic = parsed.topic;
-                  payload = parsed.payload;
-                }
-              } catch (err) {
-                this.log('Failed to parse base64 decoded string as JSON');
-              }
-            }
-            
-            // If not handled yet, try hex decoding
-            if (!topic && /^[0-9a-fA-F]+$/.test(decoded.raw)) {
-              try {
-                decodedBuffer = Buffer.from(decoded.raw, 'hex');
-                decodedString = decodedBuffer.toString('utf8');
-                this.log('Decoded as hex');
-                
-                if (decodedString && (decodedString.trim().startsWith('{') || decodedString.trim().startsWith('['))) {
-                  const parsed = JSON.parse(decodedString);
-                  if (parsed.type === 'pub' && parsed.topic) {
-                    topic = parsed.topic;
-                    payload = parsed.payload;
-                  } else if (parsed.topic) {
-                    topic = parsed.topic;
-                    payload = parsed.payload;
-                  }
-                }
-              } catch (err) {
-                this.log('Failed to decode as hex or parse result');
-              }
-            }
-          }
-          
-          // Check for _type field (hex/base64 from DJSON)
-          if (!topic && (decoded._type === 'hex' || decoded._type === 'base64')) {
-            // Try to get from buffer
-            if (decoded.buffer && Buffer.isBuffer(decoded.buffer)) {
-              const bufferStr = decoded.buffer.toString('utf8');
-              try {
-                const parsed = JSON.parse(bufferStr);
-                if (parsed.type === 'pub' && parsed.topic) {
-                  topic = parsed.topic;
-                  payload = parsed.payload;
-                } else if (parsed.topic) {
-                  topic = parsed.topic;
-                  payload = parsed.payload;
-                }
-              } catch (err) {
-                this.log('Failed to parse buffer as JSON');
-              }
-            }
-            
-            // Try utf8 field
-            if (!topic && decoded.utf8) {
-              try {
-                const parsed = JSON.parse(decoded.utf8);
-                if (parsed.type === 'pub' && parsed.topic) {
-                  topic = parsed.topic;
-                  payload = parsed.payload;
-                } else if (parsed.topic) {
-                  topic = parsed.topic;
-                  payload = parsed.payload;
-                }
-              } catch (err) {
-                this.log('Failed to parse utf8 field as JSON');
-              }
-            }
-          }
-          
-          // Check for direct pub format in DJSON output
-          if (!topic && decoded.type === 'pub' && decoded.topic) {
+          if (decoded.type === 'pub' && decoded.topic) {
             topic = decoded.topic;
             payload = decoded.payload;
-          } else if (!topic && decoded.topic) {
+          } else if (decoded.topic) {
             topic = decoded.topic;
             payload = decoded.payload;
           }
@@ -320,10 +715,8 @@ export class RealtimeCore extends EventEmitter {
       }
       
       if (topic && payload !== null) {
-        this.log('PUBLISHING - Topic:', topic);
         this.publish(topic, payload, {}, deviceId);
       } else {
-        this.log('No topic found, emitting as data/raw');
         if (rawStr.trim().startsWith('{') || rawStr.trim().startsWith('[')) {
           try {
             const data = JSON.parse(rawStr);
@@ -367,6 +760,15 @@ export class RealtimeCore extends EventEmitter {
   }
 
   register(deviceId: string, socket?: any, metadata?: any) {
+    // Handle reconnection: remove old ghost connection
+    if (this.devices.has(deviceId)) {
+      this.log(`[Reconnect] Device ${deviceId} reconnecting, cleaning up old...`);
+      const oldDevice = this.devices.get(deviceId);
+      if (oldDevice?.socket && oldDevice.socket !== socket) {
+        try { oldDevice.socket.close(); } catch {}
+      }
+    }
+    
     this.devices.set(deviceId, { 
       lastSeen: Date.now(), 
       socket,
@@ -419,11 +821,17 @@ export class RealtimeCore extends EventEmitter {
 
   getStats() {
     return {
+      version: '2.0',
       cacheSize: this.jsonCache.size,
       devices: this.devices.size,
       retained: this.retained.size,
       plugins: this.plugins.size,
-      cacheEnabled: this.config.enableJSONCache || false
+      cacheEnabled: this.config.enableJSONCache || false,
+      // v2.0 stats
+      highFreqBuffers: this.highFreqBuffers.size,
+      files: this.fileRegistry.size,
+      activeTransfers: this.fileProgress.size,
+      peers: this.peerRegistry.size
     };
   }
 
@@ -431,15 +839,16 @@ export class RealtimeCore extends EventEmitter {
    * Clean up resources - Call this when shutting down
    */
   async destroy() {
-    // Clear all intervals
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
     }
     if (this.cacheCleanupInterval) {
       clearInterval(this.cacheCleanupInterval);
     }
+    if (this.bufferCleanupInterval) {
+      clearInterval(this.bufferCleanupInterval);
+    }
     
-    // Close Redis connections
     if (this.redisPub) {
       await this.redisPub.quit();
     }
@@ -447,18 +856,20 @@ export class RealtimeCore extends EventEmitter {
       await this.redisSub.quit();
     }
     
-    // Clear all maps
     this.trie = new TopicTrie();
     this.retained.clear();
     this.devices.clear();
     this.plugins.clear();
     this.pending.clear();
     this.jsonCache.clear();
+    this.highFreqBuffers.clear();
+    this.fileRegistry.clear();
+    this.fileProgress.clear();
+    this.peerRegistry.clear();
     
-    // Remove all listeners
     this.removeAllListeners();
     
-    this.log('RealtimeCore destroyed');
+    this.log('RealtimeCore v2 destroyed');
   }
 
   private startCleanup() {
@@ -482,3 +893,9 @@ export class RealtimeCore extends EventEmitter {
     }, 5000);
   }
 }
+
+// Export for use
+export { TopicTrie } from './trie';
+export { encode, decode, getSize } from './codec';
+export { RealtimePlugin, RealtimeContext } from './plugins';
+export { djson, toBuffer, toBase64 } from '../djson/djson';

@@ -4,3 +4,5 @@ node_modules/
 jest.config.js
 tsconfig.json
 src/
+real-test/
+phone-system/
