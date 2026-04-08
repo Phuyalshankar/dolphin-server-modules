@@ -280,12 +280,13 @@ export class RealtimeCore extends EventEmitter {
     const buffer = this.highFreqBuffers.get(topic);
     
     if (!buffer || buffer.length === 0) {
-      return this.sendTo(deviceId, { 
+      this.sendTo(deviceId, { 
         type: 'PULL_EMPTY', 
         topic, 
         message: 'No data available',
         timestamp: Date.now()
       });
+      return;
     }
     
     // पछिल्लो 'count' वटा डाटा मात्र लिने
@@ -323,12 +324,15 @@ export class RealtimeCore extends EventEmitter {
     const stats = fs.statSync(filePath);
     const finalChunkSize = chunkSize || this.config.defaultChunkSize || this.DEFAULT_CHUNK_SIZE;
     
+    // FIX: Extract just the filename, not the full path (supports both Windows and Unix paths)
+    const filename = filePath.split(/[/\\]/).pop() || filePath;
+    
     const metadata: FileMetadata = {
       path: filePath,
       size: stats.size,
       chunkSize: finalChunkSize,
       totalChunks: Math.ceil(stats.size / finalChunkSize),
-      name: filePath.split('/').pop() || filePath,
+      name: filename,  // Use just the filename, not the full path
       createdAt: Date.now()
     };
     

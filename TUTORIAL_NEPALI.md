@@ -216,7 +216,20 @@ app.use('/api', apiRouter); // Route अब /api/ping मा उपलब्ध 
 
 ---
 
-## १३. अन्तिममा (Conclusion)
+## १३. Universal Signaling (WebRTC & IoT) [NEW]
+Dolphin v1.6.0 बाट नयाँ "Universal Signaling Module" थपिएको छ जसमा फोन, IoT र मेडिकल डिभाइस कन्ट्रोल गर्न सकिन्छ।
+
+```typescript
+import { createSignaling } from 'dolphin-server-modules/signaling';
+const signaling = createSignaling(rt);
+
+// IoT कमाण्ड पठाउन
+await signaling.sendCommand('DoctorApp', 'Machine_01', { action: 'START' });
+```
+
+---
+
+## १४. अन्तिममा (Conclusion)
 
 Dolphin Framework निकै छिटो र सजिलो छ। यसले तपाईँको ब्याकइन्ड डेभलपमेन्टको अनुभवलाई नयाँ उचाइमा पुर्‍याउँछ।
 

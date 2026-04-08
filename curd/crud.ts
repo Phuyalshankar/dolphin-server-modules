@@ -253,8 +253,12 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
   };
 }
 
-export function createCrudController<T extends BaseDocument = BaseDocument>(adapter: any, collection: string) {
-  const service = createCRUD<T>(adapter);
+export function createCrudController<T extends BaseDocument = BaseDocument>(
+  adapter: any, 
+  collection: string,
+  options?: { enforceOwnership?: boolean; softDelete?: boolean; defaultLimit?: number }
+) {
+  const service = createCRUD<T>(adapter, options);
   return {
     getAll: async (ctx: any) => {
       const { limit, offset, ...filters } = ctx.query;

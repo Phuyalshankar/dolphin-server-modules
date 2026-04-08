@@ -1,6 +1,6 @@
 {
   "name": "dolphin-server-modules",
-  "version": "1.5.6",
+  "version": "1.6.1",
   "homepage": "https://github.com/Phuyalshankar/dolphin-server-modules#readme",
   "description": "Core utility modules for Auth, CRUD, and Controllers",
   "main": "dist/index.js",
@@ -29,7 +29,8 @@
     "./realtime/codec": "./dist/realtime/codec.js",
     "./realtime/plugins": "./dist/realtime/plugins.js",
     "./swagger": "./dist/swagger/swagger.js",
-    "./djson": "./dist/djson/djson.js"
+    "./djson": "./dist/djson/djson.js",
+    "./signaling": "./dist/signaling/index.js"
   },
   "scripts": {
     "build": "tsc",

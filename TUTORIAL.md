@@ -297,4 +297,30 @@ test('product CRUD', async () => {
 - `leanByDefault: true` (default) — Mongoose queries faster हुन्छन्।
 - Production मा `enforceOwnership: true` र proper auth middleware राख्नुहोस्।
 
+---
+
+## 12. Universal Signaling (WebRTC & IoT)
+
+Dolphin v1.6.0 introduces a zero-dependency universal signaling module for WebRTC and IoT/Medical device control:
+
+```typescript
+import { createSignaling } from 'dolphin-server-modules/signaling';
+import { RealtimeCore } from 'dolphin-server-modules/realtime';
+
+const rt = new RealtimeCore();
+const signaling = createSignaling(rt);
+
+// 1. WebRTC Call
+await signaling.invite('user1', 'user2', { sdp: 'offer_data' });
+
+signaling.onSignalFor('user2', async (signal) => {
+  if (signal.type === 'INVITE') {
+    await signaling.accept('user2', signal.from, { sdp: 'answer_data' });
+  }
+});
+
+// 2. IoT / Medical Command
+await signaling.sendCommand('DoctorApp', 'ECG_Monitor', { action: 'START' });
+```
+
 Happy Coding! 🐬

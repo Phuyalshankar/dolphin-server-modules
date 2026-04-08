@@ -115,6 +115,7 @@ rt.subscribe('factory/machine/+', (data) => {
 | **Validation** | `/middleware/zod` | Type-safe Zod validation middleware. |
 | **Swagger Docs** | `/swagger` | Auto-generated OpenAPI docs from Zod schemas. |
 | **IoT Plugins** | `/realtime/plugins` | Native parsers for HL7, Modbus, and DICOM. |
+| **Signaling** | `/signaling` | Universal WebRTC & Control Signaling module. |
 | **Mongoose Adapter** | `/adapters/mongoose` | Full Mongoose ↔ CRUD bridge with query mapping. |
 
 ---
