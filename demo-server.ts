@@ -3,6 +3,8 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createDolphinServer } from './server/server';
 import { createCRUD } from './curd/crud';
 import { createMongooseAdapter } from './adapters/mongoose';
+import { RealtimeCore } from './realtime/core';
+import path from 'path';
 
 // ===== Mongoose Models =====
 const ProductSchema = new Schema({
@@ -43,8 +45,12 @@ async function bootstrap() {
   const service = createCRUD(mongoAdapter as any, { enforceOwnership: false });
   const COLLECTION = 'Product';
 
-  // 4. Dolphin server
-  const app = createDolphinServer();
+  // 4. Realtime Setup
+  const rt = new RealtimeCore({ debug: true });
+  rt.pubFile('test-file-id', path.join(process.cwd(), 'test-file.txt'));
+
+  // 5. Dolphin server
+  const app = createDolphinServer({ realtime: rt });
 
   // ===== CORRECT ROUTE MAPPINGS =====
 

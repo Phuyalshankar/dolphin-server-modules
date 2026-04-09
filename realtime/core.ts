@@ -3,6 +3,7 @@ import { TopicTrie } from './trie';
 import { encode, decode, getSize } from './codec';
 import { RealtimePlugin, RealtimeContext } from './plugins';
 import { djson, toBuffer, toBase64 } from '../djson/djson';
+import * as fs from 'fs';
 
 /**
  * File Metadata Interface
@@ -282,6 +283,7 @@ export class RealtimeCore extends EventEmitter {
     if (!buffer || buffer.length === 0) {
       this.sendTo(deviceId, { 
         type: 'PULL_EMPTY', 
+        from: 'SERVER',
         topic, 
         message: 'No data available',
         timestamp: Date.now()
@@ -294,6 +296,7 @@ export class RealtimeCore extends EventEmitter {
     
     this.sendTo(deviceId, {
       type: 'PULL_RESPONSE',
+      from: 'SERVER',
       topic,
       count: lastData.length,
       totalAvailable: buffer.length,
@@ -314,7 +317,6 @@ export class RealtimeCore extends EventEmitter {
    * - हरेक टुक्रा 64KB (हल्का)
    */
   pubFile(fileId: string, filePath: string, chunkSize?: number): FileMetadata | null {
-    const fs = require('fs');
     
     if (!fs.existsSync(filePath)) {
       this.log(`pubFile: File not found - ${filePath}`);
@@ -372,8 +374,6 @@ export class RealtimeCore extends EventEmitter {
       return false;
     }
     
-    const fs = require('fs');
-    
     if (!fs.existsSync(file.path)) {
       this.sendTo(deviceId, { 
         type: 'FILE_ERROR', 
@@ -411,6 +411,7 @@ export class RealtimeCore extends EventEmitter {
       
       this.sendTo(deviceId, {
         type: 'FILE_CHUNK',
+        from: 'SERVER',
         fileId,
         name: file.name,
         chunkIndex: startChunk,
@@ -706,6 +707,12 @@ export class RealtimeCore extends EventEmitter {
         if (parsed.type === 'pub' && parsed.topic) {
           topic = parsed.topic;
           payload = parsed.payload;
+        } else if (parsed.type === 'PULL_REQUEST' && parsed.topic && deviceId) {
+          this.subPull(deviceId, parsed.topic, parsed.count);
+          return;
+        } else if (parsed.type === 'FILE_REQUEST' && parsed.fileId && deviceId) {
+          await this.subFile(deviceId, parsed.fileId, parsed.startChunk || 0);
+          return;
         } else if (parsed.topic) {
           topic = parsed.topic;
           payload = parsed.payload;

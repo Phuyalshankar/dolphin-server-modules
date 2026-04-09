@@ -1,4 +1,4 @@
-# Dolphin Framework Tutorial 🐬 (v1.7.0)
+# Dolphin Framework Tutorial 🐬 (v2.0.0)
 
 Welcome to the official tutorial for the **Dolphin Framework**. This guide will take you from zero to a production-ready API using native, high-performance modules.
 
@@ -159,11 +159,21 @@ async function startApp() {
 
   // 3. Realtime: Mirroring & Signaling
   await dolphin.connect();
-  dolphin.onSignal(sig => {
-    if(sig.type === 'MIRROR') {
-       document.getElementById('display').src = sig.data.url;
-    }
+  
+  // High-frequency "Sensor" Push
+  dolphin.pubPush('iot/heartrate', { bpm: 72 });
+
+  // Demand-based history Pull
+  dolphin.subscribe('pull:response/logs', (batch) => {
+      console.log("Buffered logs received:", batch);
   });
+  dolphin.subPull('logs', 20); // Get last 20 logs
+
+  // Managed File Download (v2.0)
+  dolphin.subscribe('file:chunk/report', (chunk) => {
+      console.log(`Progress: ${chunk.chunkIndex}/${chunk.totalChunks}`);
+  });
+  dolphin.subFile('report');
 }
 ```
 
