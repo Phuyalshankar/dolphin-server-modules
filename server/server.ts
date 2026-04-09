@@ -1,9 +1,24 @@
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
 import { WebSocketServer } from 'ws';
 import { createDolphinRouter } from '../router/router';
 
 export function createDolphinServer(options: { port?: number; host?: string, realtime?: any } = {}) {
   const router = createDolphinRouter();
+
+  // Automatically serve the client library
+  router.get('/dolphin-client.js', (ctx) => {
+    const clientPath = path.join(process.cwd(), 'scripts', 'client.js');
+    if (fs.existsSync(clientPath)) {
+      const content = fs.readFileSync(clientPath, 'utf8');
+      ctx.setHeader('Content-Type', 'application/javascript');
+      ctx.res.end(content);
+      return;
+    }
+    return ctx.status(404).json({ error: 'Client library not found' });
+  });
+
   const middlewares: any[] = [];
   const wss = new WebSocketServer({ noServer: true });
 

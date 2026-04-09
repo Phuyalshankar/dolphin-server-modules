@@ -12,6 +12,7 @@ export enum SignalType {
   COMMAND = 'COMMAND',
   COMMAND_ACK = 'COMMAND_ACK',
   TELEMETRY = 'TELEMETRY',
+  MIRROR = 'MIRROR',
   
   // General Acknowledgements
   ACK = 'ACK'
@@ -134,6 +135,13 @@ export class UniversalSignaling {
     } else {
       this.rt.privatePub(to, payload);
     }
+  }
+
+  /**
+   * Mirror a URL to a specific device's pane
+   */
+  public async mirror(from: string, to: string, url: string, options: any = {}): Promise<boolean> {
+    return this.sendRaw(to, SignalType.MIRROR, { url, ...options }, from);
   }
 
   /**

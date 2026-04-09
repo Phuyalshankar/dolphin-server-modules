@@ -59,21 +59,70 @@ app.listen(5000, () => {
 
 कुनै पनि टेलिफोनले कल पाउनका लागि सर्भरमा रजिस्टर हुनुपर्छ। डल्फिनमा यो एकदमै सजिलो छ। बाहिरको डिभाइस (Mobile/Web) ले जोडिँदा URL मा आफ्नो ID पठाउनुपर्छ।
 
-**URL Format:** `ws://your-server:5000/realtime?deviceId=USER_NAME`
+---
 
-**Client-side Example:**
-```javascript
-const myId = "nurse_station_01";
-const socket = new WebSocket(`ws://localhost:5000/realtime?deviceId=${myId}`);
+## ५. डल्फिन क्लाइन्ट लाइब्रेरी (Step 3: New Dolphin Client)
 
-socket.onopen = () => {
-  console.log("Nurse Station Registered!");
-};
+```typescript
+import { DolphinClient } from 'dolphin-client';
+
+async function start() {
+  // १. सर्भरमा जोड्ने
+  const client = new DolphinClient("ws://localhost:5000?id=nurse_station_01");
+
+  // २. मेसेज पठाउने (Publish)
+  client.publish("hospital/status", { status: "ready" });
+}
+
+start();
 ```
 
 ---
 
-## ५. सिग्नलिङ्ग र फोन कल (Step 3: Signaling Mastery)
+## ६. फुल-स्ट्याक फिचरहरू: API र Auth (New: Full-stack Features) 🐬🔐
+
+डल्फिन क्लाइन्ट अब केवल रियल-टाइमका लागि मात्र होइन, यसले तपाईँको सम्पूर्ण API र Authentication पनि ह्यान्डल गर्छ।
+
+### क. लगइन र सुरक्षा (Authentication)
+तपाईँले म्यानुअल तरिकाले `fetch` लेख्नु पर्दैन। टोकन (JWT) आफैँ म्यानेज हुन्छ।
+
+```javascript
+// १. लगइन गर्ने
+async function loginUser() {
+  try {
+    const res = await dolphin.auth.login("user@example.com", "password123");
+    console.log("Welcome,", res.user.email);
+  } catch (err) {
+    console.error("Login failed:", err.data.error);
+  }
+}
+
+// २. लगइन भएको युजरको डाटा तान्ने
+async function checkMe() {
+  const res = await dolphin.auth.me();
+  if (res.success) {
+    console.log("Logged in as:", res.data.email);
+  }
+}
+```
+
+### ख. डेटा फेचिङ (HTTP API)
+हरेक रिक्वेस्टमा `Authorization` हेडर अटोमेटिक थपिन्छ।
+
+```javascript
+// १. डाटा तान्ने (GET)
+const products = await dolphin.api.get('/products');
+
+// २. डाटा पठाउने (POST)
+const newProduct = await dolphin.api.post('/products', {
+  name: "Dolphin Phone Pro",
+  price: 999
+});
+```
+
+---
+
+## ७. सिग्नलिङ्ग र फोन कल (Step 4: Signaling Mastery)
 
 रजिस्टर भइसकेपछि हामी कलको लजिक लेख्न सक्छौँ।
 
@@ -136,7 +185,29 @@ const realtime = new RealtimeCore({
 
 ---
 
-## ८. हस्पिटल इन्टरकमको पूर्ण उदाहरण (Real-world Example)
+## १०. रिमोट यूआरएल मिररिङ (New: Remote URL Mirroring) 🐬📺
+
+डल्फिनले सर्भरबाटै कुनै पनि डिभाइसको स्क्रिनमा कुन पेज देखाउने भन्ने नियन्त्रण गर्न सक्छ।
+
+### १. सर्भरबाट मिरर अर्डर दिने:
+```typescript
+phone.mirror('ADMIN', 'ROOM_101', 'https://hospital.com/vitals/101');
+```
+
+### २. क्लाइन्टमा मिरर ह्यान्डल गर्ने:
+```javascript
+client.onSignal((payload) => {
+  if (payload.type === 'MIRROR') {
+    console.log("Displaying URL:", payload.data.url);
+    // आईफ्रेम वा विन्डो अपडेट गर्ने
+    document.getElementById('display-pane').src = payload.data.url;
+  }
+});
+```
+
+---
+
+## ११. हस्पिटल इन्टरकमको पूर्ण उदाहरण (Real-world Example)
 
 यो एउटा पूर्ण कोड हो जसले हस्पिटलको कोठा नम्बर १०१ बाट नर्स स्टेसनमा फोन गर्छ:
 
@@ -177,4 +248,6 @@ app.listen(3000);
 3. **Debug:** समस्या आएमा `debug: true` राखेर कन्सोलमा के भइरहेको छ हेर्नुहोस्।
 
 ---
-**बधाई छ!** तपाईँ अब डल्फिन टेलिफोन सिस्टमको मास्टर हुनुभयो। 🐬📞
+---
+
+**बधाई छ!** तपाईँ अब डल्फिन टेलिफोन र रियल-टाइम मिररिङ सिस्टमको मास्टर हुनुभयो। 🐬📞📺

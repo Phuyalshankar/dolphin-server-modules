@@ -1,4 +1,4 @@
-# Dolphin Framework: 0 to 100% Full Tutorial (Nepali) 🐬
+# Dolphin Framework: 0 to 100% Full Tutorial (Nepali) 🐬 [v1.7.0]
 
 Dolphin Framework मा तपाईँलाई स्वागत छ! यो गाइडमा हामी Dolphin प्रयोग गरेर एउटा शक्तिशाली, छिटो र आधुनिक API कसरी बनाउने भनेर सुरुदेखि अन्त्यसम्म सिक्नेछौँ।
 
@@ -229,7 +229,34 @@ await signaling.sendCommand('DoctorApp', 'Machine_01', { action: 'START' });
 
 ---
 
-## १४. अन्तिममा (Conclusion)
+## १५. डल्फिन क्लाइन्ट लाइब्रेरी (Full-stack Client Library) [NEW]
+
+डल्फिन सर्भरले अब आफैँ एउटा हलुका क्लाइन्ट लाइब्रेरी उपलब्ध गराउँछ। यसका लागि तपाईँले NPM इन्स्टल गर्नु पर्दैन।
+
+### क. लाइब्रेरी लोड गर्ने
+```html
+<script src="/dolphin-client.js"></script>
+```
+
+### ख. प्रयोग गर्ने तरिका (API, Auth & Realtime)
+```javascript
+// १. अटो-इनिशियलाइज्ड 'dolphin' अब्जेक्ट प्रयोग गर्नुहोस्
+async function setup() {
+  // २. लगइन गर्ने
+  await dolphin.auth.login("admin@test.com", "password");
+
+  // ३. डेटा फेच गर्ने (अटोमेटिक टोकन म्यानेजमेन्ट)
+  const products = await dolphin.api.get('/products');
+
+  // ४. रियल-टाइम पब-सब (Pub/Sub)
+  await dolphin.connect();
+  dolphin.subscribe("alerts", (data) => console.log("Alert:", data));
+}
+```
+
+---
+
+## १६. अन्तिममा (Conclusion)
 
 Dolphin Framework निकै छिटो र सजिलो छ। यसले तपाईँको ब्याकइन्ड डेभलपमेन्टको अनुभवलाई नयाँ उचाइमा पुर्‍याउँछ।
 
