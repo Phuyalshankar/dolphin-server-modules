@@ -153,9 +153,16 @@ async function startApp() {
   // 1. Auth: Seamless Login
   await dolphin.auth.login("admin@test.com", "password123");
 
-  // 2. API: Automatic Token Handling
+  // 2. API: Dynamic Proxy (Native style)
+  const products = await dolphin.api.products(); 
+  // Equivalent to: await dolphin.api.get('/products');
+
+  // Nested paths & explicit methods
+  const profile = await dolphin.api.users.profile(); // -> /users/profile
+  await dolphin.api.products.post({ name: "Dolphin" }); 
+
+  // Traditional way still works
   const data = await dolphin.api.get('/products');
-  console.log("Products:", data);
 
   // 3. Realtime: Mirroring & Signaling
   await dolphin.connect();

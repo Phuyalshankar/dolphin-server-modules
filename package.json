@@ -1,6 +1,6 @@
 {
   "name": "dolphin-server-modules",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "homepage": "https://github.com/Phuyalshankar/dolphin-server-modules#readme",
   "description": "Core utility modules for Auth, CRUD, and Controllers",
   "main": "dist/index.js",

@@ -44,6 +44,52 @@ class APIHandler {
      */
     constructor(client) {
         this.client = client;
+        return this._createProxy([]);
+    }
+
+    /**
+     * @param {string[]} pathParts
+     * @private
+     */
+    _createProxy(pathParts) {
+        const path = pathParts.join('/');
+        
+        const target = (options) => {
+            return this.request('GET', path, null, options);
+        };
+
+        // Add standard methods to the function target
+        target.get = (pathOrOptions, options) => {
+            if (typeof pathOrOptions === 'string') return this.request('GET', pathOrOptions, null, options);
+            return this.request('GET', path, null, pathOrOptions);
+        };
+        target.post = (pathOrBody, bodyOrOptions, options) => {
+            if (typeof pathOrBody === 'string') return this.request('POST', pathOrBody, bodyOrOptions, options);
+            return this.request('POST', path, pathOrBody, bodyOrOptions);
+        };
+        target.put = (pathOrBody, bodyOrOptions, options) => {
+            if (typeof pathOrBody === 'string') return this.request('PUT', pathOrBody, bodyOrOptions, options);
+            return this.request('PUT', path, pathOrBody, bodyOrOptions);
+        };
+        target.del = (pathOrOptions, options) => {
+            if (typeof pathOrOptions === 'string') return this.request('DELETE', pathOrOptions, null, options);
+            return this.request('DELETE', path, null, pathOrOptions);
+        };
+        target.request = (method, subPath, body, options) => {
+            const finalPath = subPath ? `${path}/${subPath.startsWith('/') ? subPath.slice(1) : subPath}` : path;
+            return this.request(method, finalPath, body, options);
+        };
+
+        const methods = ['get', 'post', 'put', 'del', 'request'];
+
+        return new Proxy(target, {
+            get: (t, prop) => {
+                if (typeof prop === 'string' && !methods.includes(prop)) {
+                    return this._createProxy([...pathParts, prop]);
+                }
+                return t[prop];
+            }
+        });
     }
 
     /**
@@ -60,7 +106,6 @@ class APIHandler {
             ...options.headers
         };
         
-        // अटोमेटिक टोकन इन्जेक्सन
         if (this.client.accessToken) {
             headers['Authorization'] = `Bearer ${this.client.accessToken}`;
         }
@@ -76,8 +121,6 @@ class APIHandler {
         }
 
         const response = await fetch(url, fetchOptions);
-        
-        // JSON वा Text ह्यान्डल गर्ने
         const contentType = response.headers.get('content-type');
         let data;
         if (contentType && contentType.includes('application/json')) {
@@ -93,14 +136,35 @@ class APIHandler {
         return data;
     }
 
-    /** @param {string} path @param {RequestInit} [options] */
-    get(path, options) { return this.request('GET', path, null, options); }
-    /** @param {string} path @param {any} body @param {RequestInit} [options] */
-    post(path, body, options) { return this.request('POST', path, body, options); }
-    /** @param {string} path @param {any} body @param {RequestInit} [options] */
-    put(path, body, options) { return this.request('PUT', path, body, options); }
-    /** @param {string} path @param {RequestInit} [options] */
-    del(path, options) { return this.request('DELETE', path, null, options); }
+    /**
+     * @param {string|RequestInit} [pathOrOptions]
+     * @param {RequestInit} [options]
+     * @returns {Promise<any>}
+     */
+    get(pathOrOptions, options) { return Promise.resolve(); }
+
+    /**
+     * @param {string|any} [pathOrBody]
+     * @param {any} [bodyOrOptions]
+     * @param {RequestInit} [options]
+     * @returns {Promise<any>}
+     */
+    post(pathOrBody, bodyOrOptions, options) { return Promise.resolve(); }
+
+    /**
+     * @param {string|any} [pathOrBody]
+     * @param {any} [bodyOrOptions]
+     * @param {RequestInit} [options]
+     * @returns {Promise<any>}
+     */
+    put(pathOrBody, bodyOrOptions, options) { return Promise.resolve(); }
+
+    /**
+     * @param {string|RequestInit} [pathOrOptions]
+     * @param {RequestInit} [options]
+     * @returns {Promise<any>}
+     */
+    del(pathOrOptions, options) { return Promise.resolve(); }
 }
 
 class AuthHandler {
@@ -163,13 +227,16 @@ class DolphinClient {
             url = window.location.host;
         }
         
-        this.host = (url || 'localhost').replace(/\/$/, "").replace(/^https?:\/\//, "");
-        
         let protocol = 'http:';
-        if (typeof window !== 'undefined') {
+        if (url && url.startsWith('https://')) {
+            protocol = 'https:';
+        } else if (url && url.startsWith('http://')) {
+            protocol = 'http:';
+        } else if (typeof window !== 'undefined') {
             protocol = window.location.protocol;
         }
-        
+
+        this.host = (url || 'localhost').replace(/\/$/, "").replace(/^https?:\/\//, "");
         this.httpUrl = `${protocol}//${this.host}`;
         this.deviceId = deviceId || 'web_' + Math.random().toString(36).substr(2, 5);
         
@@ -334,6 +401,20 @@ class DolphinClient {
 
     /**
      * @param {string} topic
+     * @param {TopicCallback} callback
+     */
+    unsubscribe(topic, callback) {
+        if (this.handlers.has(topic)) {
+            const callbacks = this.handlers.get(topic);
+            callbacks.delete(callback);
+            if (callbacks.size === 0) {
+                this.handlers.delete(topic);
+            }
+        }
+    }
+
+    /**
+     * @param {string} topic
      * @param {any} payload
      */
     publish(topic, payload) {
@@ -409,10 +490,24 @@ class DolphinClient {
     }
 
     /**
+     * @param {function(SignalMessage): void} handler
+     */
+    offSignal(handler) {
+        this.signalHandlers.delete(handler);
+    }
+
+    /**
      * @param {function(FileMetadata): void} handler
      */
     onFileAvailable(handler) {
         this.fileHandlers.add(handler);
+    }
+
+    /**
+     * @param {function(FileMetadata): void} handler
+     */
+    offFileAvailable(handler) {
+        this.fileHandlers.delete(handler);
     }
 
     _maybeReconnect() {

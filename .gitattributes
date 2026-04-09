@@ -1,0 +1,2 @@
+# Treat PDF files as binary to prevent corruption during sync
+*.pdf binary

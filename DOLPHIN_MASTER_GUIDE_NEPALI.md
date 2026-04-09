@@ -1,5 +1,5 @@
 Dolphin Framework: Absolute Master Guide (100+ Pages Equivalent) 🐬🇳🇵
-Latest Version: v2.0.0 | Updated: 2026-04-09 | License: MIT
+Latest Version: v2.2.0 | Updated: 2026-04-09 | License: MIT
 
 यो डकुमेन्ट Dolphin Framework को आधिकारिक र विस्तृत गाइड हो। यसले तपाईँलाई एउटा साधारण कोड लेख्ने डेभलपरबाट "Framework Master" बनाउन मद्दत गर्नेछ।
 
@@ -885,7 +885,12 @@ function Dashboard() {
       // १. सर्भरसँग कनेक्ट गर्ने
       await dolphin.connect();
 
-      // २. High-Frequency Data प्राप्त गर्ने (IoT Sensor)
+      // २. API Proxy प्रयोग गर्ने (New v2.2)
+      // dolphin.api.products() -> GET /products
+      const products = await dolphin.api.products();
+      await dolphin.api.call.get(); // Handles keywords correctly!
+
+      // ३. High-Frequency Data प्राप्त गर्ने
       dolphin.subscribe('sensors/temperature', (data) => {
         setTemp(data.value);
       });

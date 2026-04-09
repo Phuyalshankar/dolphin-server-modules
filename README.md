@@ -1,4 +1,4 @@
-# 🐬 Dolphin Framework (v2.0.0)
+# 🐬 Dolphin Framework (v2.2.0)
 
 **Dolphin** is a 2026-ready, ultra-lightweight, and 100% modular backend ecosystem built on native Node.js. It's not just a framework; it's a universal toolkit for Web, Microservices, and Industrial IoT.
 
@@ -60,9 +60,21 @@ Dolphin now serves its own client-side library. Just include a script tag and yo
     // 1. Auth & Token Management
     await dolphin.auth.login("admin@test.com", "password123");
 
-    // 3. Advanced Realtime (v2.0)
+    // 2. API with Dynamic Proxy (New in v2.2)
+    const products = await dolphin.api.products(); 
+    const profile  = await dolphin.api.users.profile(); 
+    await dolphin.api.products.post({ name: "Dolphin" });
+    await dolphin.api.call.get(); // Smart proxy handles reserved keywords like 'call' or 'apply'
+
+    // 3. Advanced Realtime (v2.2)
     await dolphin.connect();
     
+    // Subscribe with cleanup support
+    const onTemp = (val) => console.log(val);
+    dolphin.subscribe('sensors/temp', onTemp);
+    // ... later
+    dolphin.unsubscribe('sensors/temp', onTemp);
+
     // High-frequency data (30,000+ msgs/sec)
     dolphin.pubPush('sensors/temp', { val: 24.5 });
 
@@ -149,7 +161,7 @@ rt.subscribe('factory/machine/+', (data) => {
 | **IoT Plugins** | `/realtime/plugins` | Native parsers for HL7, Modbus, and DICOM. |
 | **Signaling** | `/signaling` | Universal WebRTC & Control Signaling module. |
 | **Mongoose Adapter** | `/adapters/mongoose` | Full Mongoose ↔ CRUD bridge with query mapping. |
-| **Client Lib** | `/dolphin-client.js` | Zero-dependency full-stack JS client. |
+| **Client Lib** | `/dolphin-client.js` | Zero-dependency full-stack JS client (v2.2: with `unsubscribe` & `off*` methods). |
 
 ---
 
@@ -211,7 +223,7 @@ npm test          # Run all 167 tests (12 suites)
 | :--- | :--- | :--- | :--- |
 | Express.js | ~15,000 | 180ms | N/A |
 | Fastify | ~35,000 | 90ms | ~10,000 msgs/sec |
-| **Dolphin V2** | **45,000+** | **< 10ms** | **31,000+ msgs/sec** |
+| **Dolphin V2** | **45,000+** | **< 10ms** | **35,000+ msgs/sec** |
 
 ---
 
