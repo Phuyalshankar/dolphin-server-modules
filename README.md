@@ -1,4 +1,4 @@
-# 🐬 Dolphin Framework (v1.5.6)
+# 🐬 Dolphin Framework (v1.7.0)
 
 **Dolphin** is a 2026-ready, ultra-lightweight, and 100% modular backend ecosystem built on native Node.js. It's not just a framework; it's a universal toolkit for Web, Microservices, and Industrial IoT.
 
@@ -22,6 +22,7 @@ Dolphin Framework को विस्तृत र आधिकारिक ग�
 - **Auto-JSON Serialization**: Simply `return` an object from your handler!
 - **Industrial IoT (IIoT)**: Native support for HL7, Modbus, and DICOM via binary plugins.
 - **Unified Context (ctx)**: Modern developer experience with legacy middleware support.
+- **Server-Served Client Library**: Zero-dependency frontend library for API, Auth, and Realtime—directly from your server.
 
 ---
 
@@ -47,7 +48,31 @@ app.get('/ping', (ctx) => {
 app.listen(3000, () => console.log("🐬 Dolphin swimming on port 3000"));
 ```
 
-### 2. Full CRUD API with Mongoose (v1.5.5)
+### 2. Full-stack Client Library (No NPM needed!)
+Dolphin now serves its own client-side library. Just include a script tag and you get Auth, API, and Realtime out of the box.
+
+```html
+<!-- In your index.html -->
+<script src="/dolphin-client.js"></script>
+
+<script>
+  async function init() {
+    // 1. Auth & Token Management
+    await dolphin.auth.login("admin@test.com", "password123");
+
+    // 2. API + Auto-Auth Headers
+    const data = await dolphin.api.get('/products');
+
+    // 3. Realtime Mirroring & Pub/Sub
+    await dolphin.connect();
+    dolphin.onSignal(sig => {
+      if(sig.type === 'MIRROR') window.location.href = sig.data.url;
+    });
+  }
+</script>
+```
+
+### 3. Full CRUD API with Mongoose (v1.7.0)
 
 > **Important:** Use `enforceOwnership: false` for public APIs (no auth required).
 > Default is `true` — requires `userId` from auth middleware.
@@ -117,6 +142,7 @@ rt.subscribe('factory/machine/+', (data) => {
 | **IoT Plugins** | `/realtime/plugins` | Native parsers for HL7, Modbus, and DICOM. |
 | **Signaling** | `/signaling` | Universal WebRTC & Control Signaling module. |
 | **Mongoose Adapter** | `/adapters/mongoose` | Full Mongoose ↔ CRUD bridge with query mapping. |
+| **Client Lib** | `/dolphin-client.js` | Zero-dependency full-stack JS client. |
 
 ---
 
