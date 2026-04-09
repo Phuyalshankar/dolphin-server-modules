@@ -1,5 +1,5 @@
 Dolphin Framework: Absolute Master Guide (100+ Pages Equivalent) 🐬🇳🇵
-Latest Version: v2.0 | Updated: 2026-04-05 | License: MIT
+Latest Version: v2.0.0 | Updated: 2026-04-09 | License: MIT
 
 यो डकुमेन्ट Dolphin Framework को आधिकारिक र विस्तृत गाइड हो। यसले तपाईँलाई एउटा साधारण कोड लेख्ने डेभलपरबाट "Framework Master" बनाउन मद्दत गर्नेछ।
 
@@ -716,6 +716,7 @@ app.listen(3000, () => {
 });
 
 console.log('Hospital Monitoring System Active! 🏥');
+
 १३.१३ API रेफरेन्स (RealtimeCore v2.0)
 Constructor Options:
 
@@ -734,37 +735,6 @@ interface RealtimeCoreConfig {
   defaultChunkSize?: number;       // File chunk size (डिफल्ट: 64KB)
   enableP2P?: boolean;             // P2P सक्षम
 }
-Methods:
-
-Method	Description
-subscribe(topic, fn, deviceId?)	टपिकमा सब्सक्राइब
-publish(topic, payload, opts?, deviceId?)	टपिकमा पब्लिस
-pubPush(topic, payload)	हाई-फ्रिक्वेन्सी पब्लिस (No JSON)
-subPull(deviceId, topic, count?)	बफरबाट डाटा तान्ने
-pubFile(fileId, filePath, chunkSize?)	फाइल ट्रान्सफर तयारी
-subFile(deviceId, fileId, startChunk?)	फाइल डाउनलोड
-resumeFile(deviceId, fileId)	रोकिएको डाउनलोड पुनः सुरु
-getFileProgress(deviceId, fileId)	डाउनलोड प्रगति हेर्ने
-listFiles()	सबै उपलब्ध फाइलहरू
-register(deviceId, socket?, metadata?)	डिभाइस रजिस्टर
-unregister(deviceId)	डिभाइस हटाउने
-isOnline(deviceId)	डिभाइस अनलाइन छ कि छैन
-isReady(deviceId)	सकेट तयार छ कि छैन
-sendTo(deviceId, payload)	डिभाइसमा सिधै पठाउने
-kick(deviceId, reason?)	डिभाइस हटाउने
-broadcastToGroup(groupName, payload)	ग्रुपमा ब्रोडकास्ट
-getOnlineDevices()	सबै अनलाइन डिभाइस
-ping(deviceId)	डिभाइस पिंग गर्ने
-privateSub(deviceId, fn)	प्राइभेट च्यानल सुन्ने
-privatePub(targetId, payload, opts?)	प्राइभेट मेसेज पठाउने
-announceToPeers(fileId, deviceId)	P2P घोषणा
-getPeersForFile(fileId)	पीयर सूची
-handle(raw, socket?, deviceId?)	कच्चा डाटा प्रोसेस
-broadcast(topic, payload, opts?)	सबै डिभाइसमा पठाउने
-use(plugin)	प्लगिन थप्ने
-getStats()	स्ट्याटिस्टिक्स
-destroy()	सबै रिसोर्स क्लिनअप
-१४. इन्डिपेन्डेन्ट राउटिङ (Independent Routing)
 typescript
 // userRoutes.ts
 import { createDolphinRouter } from 'dolphin-server-modules/router';
@@ -888,43 +858,65 @@ app.use(async (ctx, next) => {
 });
 ```
 
-२०. Frontend सँग जोड्ने (React & IoT WebSockets)
-फ्रन्टइन्ड (Frontend) बाट Dolphin API लाई कल गर्न तपाईंले सुरुमा CORS अन गर्नुपर्छ।
+२०. Frontend सँग जोड्ने (React & Dolphin Client v2.0)
+फ्रन्टइन्डबाट Dolphin API र Realtime प्रयोग गर्न अहिलेको सबैभन्दा सजिलो र शक्तिशाली तरिका 'Dolphin Client V2.0' प्रयोग गर्नु हो। यसले Auth, API, र Realtime लाई एउटै अबजेक्टमा समेट्छ।
 
-CORS Setup:
-```typescript
-import cors from 'cors';
-app.use(cors({ origin: 'http://localhost:3000', credentials: true })); 
+React (Vite) मा Dolphin Client प्रयोग गर्ने उदाहरण:
+
+१. **Dolphin Client सेटअप**:
+यसको लागि तपाईँको एप्लिकेसनमा सर्भरबाट सिधै उपलब्ध हुने लाइब्रेरी लोड गर्नुहोस्:
+```html
+<script src="/dolphin-client.js"></script>
 ```
 
-React बाट IoT WebSocket जोड्ने:
+२. **React Component उदाहरण**:
 ```javascript
 import { useEffect, useState } from 'react';
 
+// Dolphin Client Initialize गर्ने
+const dolphin = new DolphinClient('http://localhost:5000');
+
 function Dashboard() {
   const [temp, setTemp] = useState(0);
+  const [logs, setLogs] = useState([]);
 
   useEffect(() => {
-    // 1. Dolphin को WebSocket मा कनेक्ट गर्ने
-    const ws = new WebSocket('ws://localhost:8080?id=React_Dashboard&type=monitor');
+    async function setup() {
+      // १. सर्भरसँग कनेक्ट गर्ने
+      await dolphin.connect();
+
+      // २. High-Frequency Data प्राप्त गर्ने (IoT Sensor)
+      dolphin.subscribe('sensors/temperature', (data) => {
+        setTemp(data.value);
+      });
+
+      // ३. Historical Data तान्ने (subPull V2.0)
+      dolphin.subscribe('pull:response/system/logs', (batch) => {
+        setLogs(batch);
+      });
+      dolphin.subPull('system/logs', 10); // पछिल्लो १० वटा डाटा माग्ने
+    }
     
-    ws.onmessage = (event) => {
-      const parsed = JSON.parse(event.data);
-      if(parsed.topic === 'sensors/temperature') {
-         setTemp(parsed.payload.value);
-      }
-    };
-    
-    // 2. Dolphin लाई कुन टपिक सुन्ने भनेर Subscribe मेसेज पठाउने
-    ws.onopen = () => {
-       ws.send(JSON.stringify({ action: 'subscribe', topic: 'sensors/temperature' }));
-    };
-    
-    return () => ws.close();
+    setup();
+    return () => dolphin.socket?.close();
   }, []);
 
-  return <div><h1>लाइभ तापक्रम: {temp} °C 🌡️</h1></div>;
+  return (
+    <div>
+      <h1>लाइभ तापक्रम: {temp} °C 🌡️</h1>
+      <h3>पछिल्ला लगहरू:</h3>
+      <ul>
+        {logs.map((log, i) => <li key={i}>{log.message}</li>)}
+      </ul>
+    </div>
+  );
 }
+```
+
+Dolphin Client V2.0 का फाइदाहरू:
+- **Auto-Auth**: लगइन गरेपछि टोकन आफैं म्यानेज गर्छ।
+- **Resume Support**: फाइल ट्रान्सफर रोकिँदा त्यहीँबाट सुरु गर्छ।
+- **Smart Reconnect**: इन्टरनेट जाँदा आफैं पुनः कनेक्सन गर्छ।
 ```
 
 २१. Production Deployment (सर्भर लाइभ गर्ने)
