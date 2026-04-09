@@ -1,4 +1,4 @@
-# Dolphin Telephone System: 0 to Hero Full Tutorial 🐬📞
+# Dolphin Telephone System: 0 to Hero Full Tutorial 🐬📞 (v2.2.0)
 
 यो गाइडले तपाईँलाई Dolphin Framework प्रयोग गरेर एउटा अत्याधुनिक, उच्च-गतिको टेलिफोन र सिग्नलिङ्ग सिस्टम (Signaling System) बनाउन सुरुदेखि अन्तसम्म सिकाउनेछ। 
 
@@ -67,8 +67,9 @@ app.listen(5000, () => {
 import { DolphinClient } from 'dolphin-client';
 
 async function start() {
-  // १. सर्भरमा जोड्ने
-  const client = new DolphinClient("ws://localhost:5000?id=nurse_station_01");
+  // १. सर्भरमा जोड्ने (URL र Device ID पठाउने)
+  const client = new DolphinClient("localhost:5000", "nurse_station_01");
+  await client.connect();
 
   // २. मेसेज पठाउने (Publish)
   client.publish("hospital/status", { status: "ready" });
@@ -111,10 +112,11 @@ async function checkMe() {
 
 ```javascript
 // १. डाटा तान्ने (GET)
-const products = await dolphin.api.get('/products');
+const products = await dolphin.api.products(); // Chained Proxy (New v2.2)
+// वा परम्परागत तरिका: await dolphin.api.get('/products');
 
 // २. डाटा पठाउने (POST)
-const newProduct = await dolphin.api.post('/products', {
+const newProduct = await dolphin.api.products.post({
   name: "Dolphin Phone Pro",
   price: 999
 });
@@ -245,7 +247,8 @@ app.listen(3000);
 
 1. **Heartbeat:** डल्फिनले ६० सेकेन्डसम्म चुप लागेको डिभाइसलाई आफैँ हटाउँछ, त्यसैले पिंग-पोङ गरिरहनु पर्दैन।
 2. **Security:** `RealtimeCore` को `acl` अप्सन प्रयोग गरेर कसले कसलाई फोन गर्न पाउने भन्ने फिल्टर राख्नुहोस्।
-3. **Debug:** समस्या आएमा `debug: true` राखेर कन्सोलमा के भइरहेको छ हेर्नुहोस्।
+3. **Cleanup:** मेमोरी बचाउनका लागि काम सकिएपछि `dolphin.unsubscribe(topic, callback)` चलाउन नबिर्सिनुहोस्।
+4. **Debug:** समस्या आएमा `debug: true` राखेर कन्सोलमा के भइरहेको छ हेर्नुहोस्।
 
 ---
 ---

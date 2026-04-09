@@ -53,7 +53,7 @@ class APIHandler {
      */
     _createProxy(pathParts) {
         const path = pathParts.join('/');
-        
+
         const target = (options) => {
             return this.request('GET', path, null, options);
         };
@@ -105,7 +105,7 @@ class APIHandler {
             'Content-Type': 'application/json',
             ...options.headers
         };
-        
+
         if (this.client.accessToken) {
             headers['Authorization'] = `Bearer ${this.client.accessToken}`;
         }
@@ -226,7 +226,7 @@ class DolphinClient {
         if (!url && typeof window !== 'undefined') {
             url = window.location.host;
         }
-        
+
         let protocol = 'http:';
         if (url && url.startsWith('https://')) {
             protocol = 'https:';
@@ -239,24 +239,24 @@ class DolphinClient {
         this.host = (url || 'localhost').replace(/\/$/, "").replace(/^https?:\/\//, "");
         this.httpUrl = `${protocol}//${this.host}`;
         this.deviceId = deviceId || 'web_' + Math.random().toString(36).substr(2, 5);
-        
+
         /** @type {WebSocket | null} */
         this.socket = null;
-        
+
         // Polyfill Storage if not browser
         this.storage = typeof localStorage !== 'undefined' ? localStorage : {
             getItem: (key) => null,
-            setItem: (key, val) => {},
-            removeItem: (key) => {}
+            setItem: (key, val) => { },
+            removeItem: (key) => { }
         };
-        
+
         /** @type {string | null} */
         this.accessToken = this.storage.getItem('dolphin_token');
-        
+
         // Sub-handlers
         this.api = new APIHandler(this);
         this.auth = new AuthHandler(this);
-        
+
         /** @type {Map<string, Set<TopicCallback>>} */
         this.handlers = new Map(); // topic -> Set of callbacks
         /** @type {Set<function(SignalMessage): void>} */
@@ -288,7 +288,7 @@ class DolphinClient {
         return new Promise((resolve, reject) => {
             const protocol = this.httpUrl.startsWith('https') ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${this.host}/realtime?deviceId=${this.deviceId}`;
-            
+
             console.log(`[Dolphin] Connecting to ${wsUrl}...`);
             this.socket = new WebSocket(wsUrl);
 
@@ -317,7 +317,7 @@ class DolphinClient {
     _handleMessage(data) {
         try {
             const parsed = JSON.parse(data);
-            
+
             // १. Signaling Messages
             if (parsed.type && parsed.from && (parsed.to === this.deviceId || parsed.to === 'all')) {
                 // Auto-ACK for signaling messages
@@ -441,10 +441,10 @@ class DolphinClient {
      */
     subPull(topic, count = 10) {
         if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify({ 
-                type: 'PULL_REQUEST', 
-                topic, 
-                count 
+            this.socket.send(JSON.stringify({
+                type: 'PULL_REQUEST',
+                topic,
+                count
             }));
         }
     }
