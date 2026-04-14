@@ -201,13 +201,19 @@ export function createDolphinServer(options: { port?: number; host?: string, rea
 
   if (options.realtime) {
     wss.on('connection', (ws, request) => {
-      // Automatic device extraction from URL or header (placeholder)
       const deviceId = new URL(request.url!, `http://h`).searchParams.get('deviceId') || 'anonymous';
-      
+
       options.realtime.register(deviceId, ws);
-      
+
       ws.on('message', (data) => {
+        // Keep device alive on every message
+        options.realtime.touch(deviceId);
         options.realtime.handle(data, ws, deviceId);
+      });
+
+      // Keep device alive on pong (response to server ping)
+      ws.on('pong', () => {
+        options.realtime.touch(deviceId);
       });
 
       ws.on('close', () => options.realtime.unregister(deviceId));
