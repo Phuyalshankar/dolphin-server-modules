@@ -77,10 +77,21 @@ const matchFilter = (item: any, filter: any): boolean => {
 
 export function createCRUD<T extends BaseDocument = BaseDocument>(
   db: DatabaseAdapter,
-  options: { enforceOwnership?: boolean; softDelete?: boolean; defaultLimit?: number } = {}
+  options: { 
+    enforceOwnership?: boolean; 
+    softDelete?: boolean; 
+    defaultLimit?: number;
+    realtime?: any; // To support automatic sync broadcasting
+  } = {}
 ) {
-  const { enforceOwnership = true, softDelete = false, defaultLimit = 100 } = options;
+  const { enforceOwnership = true, softDelete = false, defaultLimit = 100, realtime } = options;
   const generateId = () => crypto.randomBytes(12).toString('hex');
+
+  const broadcast = (collection: string, type: 'create'|'update'|'delete', data: any) => {
+    if (realtime && typeof realtime.publish === 'function') {
+      realtime.publish(`db:sync/${collection.toLowerCase()}`, { type, data });
+    }
+  };
 
   const withOwnership = (filter: any, userId?: string): any => {
     if (enforceOwnership && !userId) return { _id: null };
@@ -111,13 +122,17 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
     async create(collection: string, data: Partial<T>, userId?: string): Promise<T> {
       const now = new Date().toISOString();
       const doc = { id: generateId(), createdAt: now, updatedAt: now, ...(userId && { userId }), ...data } as T;
-      return db.create(collection, doc);
+      const result = await db.create(collection, doc);
+      broadcast(collection, 'create', result);
+      return result;
     },
 
     async createMany(collection: string, items: Array<Partial<T>>, userId?: string): Promise<T[]> {
       const now = new Date().toISOString();
       const docs = items.map(item => ({ id: generateId(), createdAt: now, updatedAt: now, ...(userId && { userId }), ...item })) as T[];
-      return Promise.all(docs.map(doc => db.create(collection, doc)));
+      const results = await Promise.all(docs.map(doc => db.create(collection, doc)));
+      results.forEach(res => broadcast(collection, 'create', res));
+      return results;
     },
 
     async readOne(collection: string, id: string, userId?: string): Promise<T | null> {
@@ -164,14 +179,20 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
       if (results.length === 0) return null;
       const updateData = { ...data, updatedAt: new Date().toISOString() };
       await safeUpdate(db, collection, filter, updateData);
-      return { ...results[0], ...updateData } as T;
+      const result = { ...results[0], ...updateData } as T;
+      broadcast(collection, 'update', result);
+      return result;
     },
 
     async updateMany(collection: string, filter: any, data: Partial<T>, userId?: string): Promise<number> {
       if (enforceOwnership && !userId) return 0;
       const items = await this.read(collection, withOwnership(filter, userId), {}, userId);
       const updateData = { ...data, updatedAt: new Date().toISOString() };
-      await Promise.all(items.map(item => safeUpdate(db, collection, { id: item.id }, updateData)));
+      await Promise.all(items.map(item => {
+        const res = safeUpdate(db, collection, { id: item.id }, updateData);
+        broadcast(collection, 'update', { ...item, ...updateData });
+        return res;
+      }));
       return items.length;
     },
 
@@ -189,10 +210,14 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
       
       if (softDelete) {
         await db.update(collection, filter, { deletedAt: new Date().toISOString() });
-        return results[0] as T;
+        const result = results[0] as T;
+        broadcast(collection, 'delete', result);
+        return result;
       } else {
         await safeDelete(db, collection, filter);
-        return results[0] as T;
+        const result = results[0] as T;
+        broadcast(collection, 'delete', result);
+        return result;
       }
     },
 
@@ -201,9 +226,14 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
       const items = await this.read(collection, withOwnership(filter, userId), {}, userId);
       
       if (softDelete) {
-        await Promise.all(items.map(item => db.update(collection, { id: item.id }, { deletedAt: new Date().toISOString() })));
+        await Promise.all(items.map(item => {
+            const res = db.update(collection, { id: item.id }, { deletedAt: new Date().toISOString() });
+            broadcast(collection, 'delete', item);
+            return res;
+        }));
       } else {
         await safeDelete(db, collection, fixId(withOwnership(filter, userId)));
+        items.forEach(item => broadcast(collection, 'delete', item));
       }
       return items.length;
     },

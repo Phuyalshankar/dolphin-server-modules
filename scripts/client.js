@@ -176,11 +176,6 @@ class AuthHandler {
         this.user = null;
     }
 
-    /**
-     * @param {string} email
-     * @param {string} password
-     * @returns {Promise<any>}
-     */
     async login(email, password) {
         const res = await this.client.api.post('/auth/login', { email, password });
         if (res.accessToken) {
@@ -190,12 +185,10 @@ class AuthHandler {
         return res;
     }
 
-    /** @param {any} data */
     async register(data) {
         return await this.client.api.post('/auth/register', data);
     }
 
-    /** @returns {Promise<DolphinResponse>} */
     async me() {
         const res = await this.client.api.get('/auth/me');
         if (res.success) {
@@ -213,6 +206,93 @@ class AuthHandler {
     /** @param {string} email */
     async forgotPassword(email) {
         return await this.client.api.post('/auth/forgot-password', { email });
+    }
+}
+
+/**
+ * DolphinStore - Reactive State Sync (Zustand Alternative)
+ * Automatically syncs database collections with local state.
+ */
+class DolphinStore {
+    /** @param {DolphinClient} client */
+    constructor(client) {
+        this.client = client;
+        /** @type {Map<string, any[]>} */
+        this.data = new Map();
+        /** @type {Set<function()>} */
+        this.listeners = new Set();
+        /** @type {Set<string>} */
+        this.subscribed = new Set();
+
+        return new Proxy(this, {
+            get: (target, prop) => {
+                if (prop in target) return target[prop];
+                if (typeof prop === 'string') {
+                    return this._getCollection(prop);
+                }
+            }
+        });
+    }
+
+    /** @private */
+    _getCollection(name) {
+        if (!this.data.has(name)) {
+            this.data.set(name, []);
+            this._fetchAndSync(name);
+        }
+        return this.data.get(name);
+    }
+
+    /** @private */
+    async _fetchAndSync(name) {
+        try {
+            // 1. Initial Fetch
+            const res = await this.client.api.get(`/${name.toLowerCase()}`);
+            this.data.set(name, Array.isArray(res) ? res : (res.data || []));
+            this._notify();
+
+            // 2. Realtime Sync (if connected)
+            if (!this.subscribed.has(name)) {
+                const topic = `db:sync/${name.toLowerCase()}`;
+                this.client.subscribe(topic, (update) => {
+                    this._handleRemoteUpdate(name, update);
+                });
+                this.subscribed.add(name);
+            }
+        } catch (e) {
+            console.error(`[DolphinStore] Sync failed for ${name}:`, e);
+        }
+    }
+
+    /** @private */
+    _handleRemoteUpdate(collection, update) {
+        let items = this.data.get(collection) || [];
+        const { type, data } = update; // type: 'create', 'update', 'delete'
+
+        if (type === 'create') {
+            items = [...items, data];
+        } else if (type === 'update') {
+            items = items.map(item => (item.id === data.id || item._id === data._id) ? { ...item, ...data } : item);
+        } else if (type === 'delete') {
+            items = items.filter(item => (item.id !== data.id && item._id !== data._id));
+        }
+
+        this.data.set(collection, items);
+        this._notify();
+    }
+
+    /** Subscribe for React components (useSyncExternalStore) */
+    subscribe(listener) {
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+    }
+
+    getSnapshot(collection) {
+        return this.data.get(collection) || [];
+    }
+
+    _notify() {
+        this.listeners.forEach(l => l());
     }
 }
 
@@ -256,6 +336,7 @@ class DolphinClient {
         // Sub-handlers
         this.api = new APIHandler(this);
         this.auth = new AuthHandler(this);
+        this.store = new DolphinStore(this);
 
         /** @type {Map<string, Set<TopicCallback>>} */
         this.handlers = new Map(); // topic -> Set of callbacks
@@ -395,7 +476,13 @@ class DolphinClient {
      * @param {TopicCallback} callback
      */
     subscribe(topic, callback) {
-        if (!this.handlers.has(topic)) this.handlers.set(topic, new Set());
+        if (!this.handlers.has(topic)) {
+            this.handlers.set(topic, new Set());
+            // Tell server we want to sub
+            if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+                this.socket.send(JSON.stringify({ type: 'sub', topic }));
+            }
+        }
         this.handlers.get(topic).add(callback);
     }
 
@@ -409,6 +496,10 @@ class DolphinClient {
             callbacks.delete(callback);
             if (callbacks.size === 0) {
                 this.handlers.delete(topic);
+                // Tell server we want to unsub
+                if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+                    this.socket.send(JSON.stringify({ type: 'unsub', topic }));
+                }
             }
         }
     }

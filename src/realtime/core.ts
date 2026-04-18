@@ -34,7 +34,7 @@ interface BufferedMessage {
 export class RealtimeCore extends EventEmitter {
   private trie = new TopicTrie();
   private retained = new Map<string, { payload: any, ts: number, ttl: number, encoded?: string }>();
-  private devices = new Map<string, { lastSeen: number, socket?: any, metadata?: any }>();
+  private devices = new Map<string, { lastSeen: number, socket?: any, metadata?: any, subscriptions: Map<string, Function> }>();
   private plugins = new Map<string, RealtimePlugin>();
   private pending = new Map<number, any>();
   private msgId = 0;
@@ -194,10 +194,13 @@ export class RealtimeCore extends EventEmitter {
     }
 
     this.trie.add(topic, fn);
+    
+    // Track subscription for device
+    if (deviceId && this.devices.has(deviceId)) {
+        this.devices.get(deviceId)?.subscriptions.set(topic, fn);
+    }
 
-    // BUG FIX #1: Use TopicTrie matching for retained messages instead of exact string compare.
-    // Previously `t === topic` only matched exact topics, breaking wildcard subscriptions like
-    // 'sensors/+' or 'sensors/#' which would never receive retained messages.
+    // BUG FIX #1: Use TopicTrie matching for retained messages
     for (const [t, data] of this.retained.entries()) {
       const tempTrie = new TopicTrie();
       tempTrie.add(topic, fn);
@@ -205,6 +208,27 @@ export class RealtimeCore extends EventEmitter {
     }
   }
 
+  unregister(deviceId: string, topic?: string) {
+    const device = this.devices.get(deviceId);
+    if (!device) return;
+
+    if (topic) {
+        const fn = device.subscriptions.get(topic);
+        if (fn) {
+            this.trie.remove(topic, fn);
+            device.subscriptions.delete(topic);
+        }
+    } else {
+        // Unsubscribe from all topics
+        for (const [t, fn] of device.subscriptions.entries()) {
+            this.trie.remove(t, fn);
+        }
+        if (device.socket) {
+            try { device.socket.close(); } catch {}
+        }
+        this.devices.delete(deviceId);
+    }
+  }
   publish(topic: string, payload: any, opts: { retain?: boolean, ttl?: number } = {}, deviceId?: string) {
     const size = getSize(payload);
     if (size > (this.config.maxMessageSize || 256 * 1024)) {
@@ -707,6 +731,16 @@ export class RealtimeCore extends EventEmitter {
         if (parsed.type === 'pub' && parsed.topic) {
           topic = parsed.topic;
           payload = parsed.payload;
+        } else if (parsed.type === 'sub' && parsed.topic && deviceId) {
+          this.subscribe(parsed.topic, (payload) => {
+            if (socket.readyState === 1) {
+              this.sendTo(deviceId, { topic: parsed.topic, payload });
+            }
+          }, deviceId);
+          return;
+        } else if (parsed.type === 'unsub' && parsed.topic && deviceId) {
+          this.unregister(deviceId, parsed.topic);
+          return;
         } else if (parsed.type === 'PULL_REQUEST' && parsed.topic && deviceId) {
           this.subPull(deviceId, parsed.topic, parsed.count);
           return;
@@ -836,7 +870,8 @@ export class RealtimeCore extends EventEmitter {
     this.devices.set(deviceId, { 
       lastSeen: Date.now(), 
       socket,
-      metadata
+      metadata,
+      subscriptions: new Map()
     });
 
     if (socket) {
@@ -866,13 +901,6 @@ export class RealtimeCore extends EventEmitter {
     }
   }
 
-  unregister(deviceId: string) {
-    const device = this.devices.get(deviceId);
-    if (device?.socket) {
-      try { device.socket.close(); } catch {}
-    }
-    this.devices.delete(deviceId);
-  }
 
   getSocket(deviceId: string) {
     return this.devices.get(deviceId)?.socket;

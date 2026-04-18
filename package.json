@@ -34,7 +34,9 @@
     "./realtime/plugins": "./dist/realtime/plugins.js",
     "./swagger": "./dist/swagger/swagger.js",
     "./djson": "./dist/djson/djson.js",
-    "./signaling": "./dist/signaling/index.js"
+    "./signaling": "./dist/signaling/index.js",
+    "./cli": "./dist/bin/cli.js",
+    "./client": "./scripts/client.js"
   },
   "scripts": {
     "build": "tsc",
