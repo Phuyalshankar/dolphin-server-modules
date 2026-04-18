@@ -1,4 +1,4 @@
-# 🐬 Dolphin Framework (v2.2.1)
+# 🐬 Dolphin Framework (v2.2.2)
 
 ![NPM Version](https://img.shields.io/npm/v/dolphin-server-modules?color=blue&style=flat-square)
 ![Build Status](https://img.shields.io/github/actions/workflow/status/Phuyalshankar/dolphin-server-modules/main.yml?style=flat-square)
