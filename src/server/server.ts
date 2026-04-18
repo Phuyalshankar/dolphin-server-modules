@@ -9,7 +9,8 @@ export function createDolphinServer(options: { port?: number; host?: string, rea
 
   // Automatically serve the client library
   router.get('/dolphin-client.js', (ctx) => {
-    const clientPath = path.join(process.cwd(), 'scripts', 'client.js');
+    // Look for client.js relative to this server module (works both in dev and as installed package)
+    const clientPath = path.resolve(__dirname, '../../scripts/client.js');
     if (fs.existsSync(clientPath)) {
       const content = fs.readFileSync(clientPath, 'utf8');
       ctx.setHeader('Content-Type', 'application/javascript');

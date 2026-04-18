@@ -4,6 +4,9 @@
   "homepage": "https://github.com/Phuyalshankar/dolphin-server-modules#readme",
   "description": "Core utility modules for Auth, CRUD, and Controllers",
   "main": "dist/index.js",
+  "bin": {
+    "dolphin-server": "./dist/bin/cli.js"
+  },
   "types": "dist/index.d.ts",
   "files": [
     "dist",
@@ -36,6 +39,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/demo-server.js",
+    "dolphin": "node dist/bin/cli.js",
     "dev": "npm run build && npm run start",
     "test": "jest",
     "prepublishOnly": "npm run build"

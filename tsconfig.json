@@ -6,7 +6,7 @@
     "declaration": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -14,19 +14,7 @@
     "types": ["node", "jest"]
   },
   "include": [
-    "server/**/*",
-    "auth/**/*",
-    "authController/**/*",
-    "controller/**/*",
-    "curd/**/*",
-    "middleware/**/*",
-    "realtime/**/*",
-    "adapters/**/*",
-    "router/**/*",
-    "swagger/**/*",
-    "djson/**/*",
-    "index.ts",
-    "demo-server.ts"
+    "src/**/*"
   ],
   "exclude": ["node_modules", "dist"]
 }

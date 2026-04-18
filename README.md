@@ -1,4 +1,9 @@
-# 🐬 Dolphin Framework (v2.2.0)
+# 🐬 Dolphin Framework (v2.2.1)
+
+![NPM Version](https://img.shields.io/npm/v/dolphin-server-modules?color=blue&style=flat-square)
+![Build Status](https://img.shields.io/github/actions/workflow/status/Phuyalshankar/dolphin-server-modules/main.yml?style=flat-square)
+![License](https://img.shields.io/npm/l/dolphin-server-modules?style=flat-square)
+![Downloads](https://img.shields.io/npm/dm/dolphin-server-modules?style=flat-square&color=green)
 
 **Dolphin** is a 2026-ready, ultra-lightweight, and 100% modular backend ecosystem built on native Node.js. It's not just a framework; it's a universal toolkit for Web, Microservices, and Industrial IoT.
 
@@ -29,6 +34,12 @@ Dolphin Framework को विस्तृत र आधिकारिक ग�
 ## 📦 Installation
 ```bash
 npm install dolphin-server-modules
+```
+
+### 🛠️ CLI Usage (New in v2.2.1)
+Run a Dolphin server instantly from any project:
+```bash
+npx dolphin-server --port=8080
 ```
 
 ---
@@ -150,18 +161,24 @@ rt.subscribe('factory/machine/+', (data) => {
 
 | Module | Path | Description |
 | :--- | :--- | :--- |
-| **Server** | `/server` | Native HTTP server with `ctx` API & Auto-JSON. |
-| **Router** | `/router` | Standalone sub-routers with multi-handler support. |
-| **Auth** | `/auth` | Argon2/JWT based secure auth with 2FA (TOTP). |
-| **CRUD** | `/curd` | Generic CRUD service with ownership & soft-delete. |
-| **Auth Controller** | `/auth-controller` | Pre-built auth routes (register, login, refresh). |
-| **Realtime** | `/realtime` | Pub/Sub engine with `TopicTrie` & binary codecs. |
-| **Validation** | `/middleware/zod` | Type-safe Zod validation middleware. |
-| **Swagger Docs** | `/swagger` | Auto-generated OpenAPI docs from Zod schemas. |
-| **IoT Plugins** | `/realtime/plugins` | Native parsers for HL7, Modbus, and DICOM. |
-| **Signaling** | `/signaling` | Universal WebRTC & Control Signaling module. |
-| **Mongoose Adapter** | `/adapters/mongoose` | Full Mongoose ↔ CRUD bridge with query mapping. |
-| **Client Lib** | `/dolphin-client.js` | Zero-dependency full-stack JS client (v2.2: with `unsubscribe` & `off*` methods). |
+| **Server** | `dolphin-server-modules/server` | Native HTTP server with `ctx` API & Auto-JSON. |
+| **Router** | `dolphin-server-modules/router` | Standalone sub-routers with multi-handler support. |
+| **Auth** | `dolphin-server-modules/auth` | Argon2/JWT based secure auth with 2FA (TOTP). |
+| **CRUD** | `dolphin-server-modules/crud` | Generic CRUD service with ownership & soft-delete. |
+| **Auth Controller** | `dolphin-server-modules/auth-controller` | Pre-built auth routes (register, login, refresh). |
+| **Realtime** | `dolphin-server-modules/realtime` | Pub/Sub engine with `TopicTrie` & binary codecs. |
+| **Validation** | `dolphin-server-modules/middleware/zod` | Type-safe Zod validation middleware. |
+| **Swagger Docs** | `dolphin-server-modules/swagger` | Auto-generated OpenAPI docs from Zod schemas. |
+| **IoT Plugins** | `dolphin-server-modules/realtime/plugins` | Native parsers for HL7, Modbus, and DICOM. |
+| **Signaling** | `dolphin-server-modules/signaling` | Universal WebRTC & Control Signaling module. |
+| **Mongoose Adapter** | `dolphin-server-modules/adapters/mongoose` | Full Mongoose ↔ CRUD bridge with query mapping. |
+| **Client Lib** | `/dolphin-client.js` | Zero-dependency full-stack JS client. |
+
+### 🧩 How to use individual modules:
+```javascript
+// Example: Using only the Auth module in Express/Fastify
+const { createDolphinAuth } = require('dolphin-server-modules/auth');
+```
 
 ---
 
