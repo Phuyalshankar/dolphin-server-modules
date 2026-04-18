@@ -106,6 +106,8 @@ Dolphin now serves its own client-side library. Just include a script tag and yo
 
 > **Important:** Use `enforceOwnership: false` for public APIs (no auth required).
 > Default is `true` — requires `userId` from auth middleware.
+> 
+> Use `createCRUD()` for the service layer, or `createCrudController()` for ready-to-use route handlers.
 
 ```typescript
 import { createDolphinServer } from 'dolphin-server-modules/server';
@@ -172,12 +174,45 @@ rt.subscribe('factory/machine/+', (data) => {
 | **IoT Plugins** | `dolphin-server-modules/realtime/plugins` | Native parsers for HL7, Modbus, and DICOM. |
 | **Signaling** | `dolphin-server-modules/signaling` | Universal WebRTC & Control Signaling module. |
 | **Mongoose Adapter** | `dolphin-server-modules/adapters/mongoose` | Full Mongoose ↔ CRUD bridge with query mapping. |
-| **Client Lib** | `/dolphin-client.js` | Zero-dependency full-stack JS client. |
+| **Client Lib** | `/dolphin-client.js` | Zero-dependency full-stack JS client (auto-served by server). Includes API proxy, Auth, Realtime (pub/sub, pubPush, subPull), File transfer with resume. |
 
 ### 🧩 How to use individual modules:
 ```javascript
 // Example: Using only the Auth module in Express/Fastify
 const { createDolphinAuth } = require('dolphin-server-modules/auth');
+```
+
+---
+
+## 🛡️ Auth Module - 2FA with Recovery Codes
+
+Dolphin supports TOTP-based 2FA with recovery codes for account recovery:
+
+```typescript
+const auth = createAuth({ secret: 'SUPER_SECRET', issuer: 'MyApp' });
+
+// Enable 2FA for user
+const { secret, uri } = await auth.enable2FA(db, userId);
+// Scan QR code with authenticator app
+
+// Verify and activate
+const { recoveryCodes } = await auth.verify2FA(db, userId, '123456');
+// recoveryCodes: ['A3B2-C4D5', 'E6F7-G8H9', ...] (8 codes)
+
+// Disable 2FA
+await auth.disable2FA(db, userId, '123456');
+
+// Regenerate recovery codes
+const { recoveryCodes } = await auth.regenerateRecoveryCodes(db, userId, '123456');
+```
+
+### secureCookies Configuration
+
+```typescript
+const auth = createAuth({ 
+  secret: 'SUPER_SECRET',
+  secureCookies: process.env.NODE_ENV === 'production' // true in prod
+});
 ```
 
 ---
@@ -192,6 +227,44 @@ const crud = createCRUD(db, { enforceOwnership: false });
 
 // Protected API — requires auth middleware to set ctx.req.user
 const crud = createCRUD(db, { enforceOwnership: true });
+```
+
+### Soft Delete
+
+Enable soft delete to keep data but hide from queries:
+
+```typescript
+const crud = createCRUD(db, { 
+  enforceOwnership: true,
+  softDelete: true  // Records marked with `deletedAt` timestamp
+});
+
+// Delete (soft) — sets deletedAt timestamp
+await crud.deleteOne('Product', id);
+
+// Restore — removes deletedAt
+await crud.restore('Product', id);
+```
+
+### Realtime Database Sync
+
+Broadcast CRUD changes to connected clients automatically:
+
+```typescript
+const crud = createCRUD(db, { 
+  enforceOwnership: true,
+  realtime: rt  // RealtimeCore instance
+});
+
+// On create/update/delete, automatically publishes:
+// - db:sync/product { type: 'create', data: {...} }
+// - db:sync/product { type: 'update', data: {...} }
+// - db:sync/product { type: 'delete', data: {...} }
+
+// Client subscribes:
+dolphin.subscribe('db:sync/product', (update) => {
+  console.log(update.type, update.data);
+});
 ```
 
 ---
@@ -252,6 +325,10 @@ npm test          # Run all 167 tests (12 suites)
 - [x] Auto-JSON: Return objects directly from handlers
 - [x] Real Mongoose adapter with `$like`, `id→_id` query mapping
 - [x] Integration test suite with `mongodb-memory-server`
+- [x] **Server-Served Client Library**: `/dolphin-client.js` auto-serve
+- [x] **Recovery Codes**: 2FA backup codes
+- [x] **Soft Delete**: Soft delete with restore
+- [x] **Realtime DB Sync**: Auto-broadcast CRUD changes
 - [ ] **Dolphin CLI**: `npx dolphin init` for automated scaffolding
 
 ---
