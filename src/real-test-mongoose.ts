@@ -69,20 +69,21 @@ async function runTest() {
       console.log('✅ Created:', createdItem, '\n');
 
       // 2. Read All Products
+      const itemId = createdItem.id || createdItem._id;
       console.log('➡️ GET /products');
       res = await fetch('http://localhost:3002/products');
       const allItems = await res.json();
       console.log('✅ All Products:', allItems, '\n');
 
       // 3. Read Single Product by ID
-      console.log(`➡️ GET /products/${createdItem.id}`);
-      res = await fetch(`http://localhost:3002/products/${createdItem.id}`);
+      console.log(`➡️ GET /products/${itemId}`);
+      res = await fetch(`http://localhost:3002/products/${itemId}`);
       let singleItem = await res.json();
       console.log('✅ Single Product:', singleItem, '\n');
 
       // 4. Update Product
-      console.log(`➡️ PUT /products/${createdItem.id}`);
-      res = await fetch(`http://localhost:3002/products/${createdItem.id}`, {
+      console.log(`➡️ PUT /products/${itemId}`);
+      res = await fetch(`http://localhost:3002/products/${itemId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ price: 899 })

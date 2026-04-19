@@ -1,5 +1,5 @@
 Dolphin Framework: Absolute Master Guide (100+ Pages Equivalent) 🐬🇳🇵
-Latest Version: v2.2.0 | Updated: 2026-04-09 | License: MIT
+Latest Version: v2.3.7 | Updated: 2026-04-20 | License: MIT
 
 यो डकुमेन्ट Dolphin Framework को आधिकारिक र विस्तृत गाइड हो। यसले तपाईँलाई एउटा साधारण कोड लेख्ने डेभलपरबाट "Framework Master" बनाउन मद्दत गर्नेछ।
 
@@ -860,6 +860,7 @@ app.use(async (ctx, next) => {
 
 २०. Frontend सँग जोड्ने (React & Dolphin Client v2.0)
 फ्रन्टइन्डबाट Dolphin API र Realtime प्रयोग गर्न अहिलेको सबैभन्दा सजिलो र शक्तिशाली तरिका 'Dolphin Client V2.0' प्रयोग गर्नु हो। यसले Auth, API, र Realtime लाई एउटै अबजेक्टमा समेट्छ।
+Dolphin v2.2 बाट नयाँ **Dynamic Proxy API** थपिएको छ, जसले API कललाई अझ सजिलो बनाउँछ।
 
 React (Vite) मा Dolphin Client प्रयोग गर्ने उदाहरण:
 
@@ -885,9 +886,14 @@ function Dashboard() {
       // १. सर्भरसँग कनेक्ट गर्ने
       await dolphin.connect();
 
-      // २. API Proxy प्रयोग गर्ने (New v2.2)
-      // dolphin.api.products() -> GET /products
-      const products = await dolphin.api.products();
+      // २. Dynamic Proxy API (New v2.2)
+      // यसले 'products' प्रोपर्टीलाई अटोमेटिक /products URL मा म्याप गर्छ
+      const products = await dolphin.api.products(); 
+      
+      // Nested paths र Methods पनि सजिलै चलाउन सकिन्छ
+      const profile = await dolphin.api.users.profile(); // GET /users/profile
+      await dolphin.api.products.post({ name: "New Product" }); // POST /products
+
       await dolphin.api.call.get(); // Handles keywords correctly!
 
       // ३. High-Frequency Data प्राप्त गर्ने

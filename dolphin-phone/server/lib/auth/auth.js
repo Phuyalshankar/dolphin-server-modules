@@ -131,7 +131,10 @@ const verifyTOTP = (token, secretBase32, window = 1) => {
 };
 const generateRecoveryCodes = (count = 8) => Array.from({ length: count }, () => `${node_crypto_1.default.randomBytes(3).toString('hex').slice(0, 4)}-${node_crypto_1.default.randomBytes(3).toString('hex').slice(0, 4)}`.toUpperCase());
 // ===== ENCRYPTION =====
-const ENC_KEY = node_crypto_1.default.scryptSync(process.env.ENCRYPTION_KEY || 'fallback-key-change-this', 'salt', 32);
+if (!process.env.ENCRYPTION_KEY) {
+    throw new Error('FATAL: ENCRYPTION_KEY environment variable is not set.');
+}
+const ENC_KEY = node_crypto_1.default.scryptSync(process.env.ENCRYPTION_KEY, 'salt', 32);
 const encrypt = (text) => {
     if (!text)
         return null;

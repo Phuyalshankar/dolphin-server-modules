@@ -1,0 +1,8 @@
+{
+  "name": "test-project",
+  "version": "1.0.0",
+  "main": "app.js",
+  "dependencies": {
+    "dolphin-server-modules": "^2.2.2"
+  }
+}

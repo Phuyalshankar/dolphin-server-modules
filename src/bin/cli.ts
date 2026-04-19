@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
+import https from 'https';
 import { createDolphinServer } from '../server/server';
 import { RealtimeCore } from '../realtime/core';
 
@@ -8,30 +9,29 @@ const args = process.argv.slice(2);
 const command = args[0];
 
 const TEMPLATES = {
-    app: `const { createDolphinServer } = require('dolphin-server-modules/server');
+    app: `import { createDolphinServer } from 'dolphin-server-modules/server';
 const app = createDolphinServer();
 
 app.get('/', (ctx) => ctx.json({ message: 'Dolphin Server is running!' }));
 
 app.listen(3000, () => console.log('🐬 Dolphin swimming on port 3000'));`,
     
-    mongoose: `const mongoose = require('mongoose');
-const { createMongooseAdapter } = require('dolphin-server-modules/adapters/mongoose');
+    mongoose: `import mongoose from 'mongoose';
+import { createMongooseAdapter } from 'dolphin-server-modules/adapters/mongoose';
 
-async function connectDB() {
-    await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/dolphin_db');
+export async function connectDB(models = {}) {
+    const uri = process.env.MONGO_URI || 'mongodb://localhost:27017/dolphin_db';
+    await mongoose.connect(uri);
     console.log('✅ MongoDB Connected');
     
     return createMongooseAdapter({
-        models: { /* Your Models Here */ }
+        models: { ...models }
     });
-}
+}`,
 
-module.exports = connectDB;`,
-
-    sequelize: `const { Sequelize } = require('sequelize');
+    sequelize: `import { Sequelize } from 'sequelize';
 // Note: This is a skeleton for Dolphin Sequelize Adapter
-async function connectDB() {
+export async function connectDB() {
     const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASS, {
         host: process.env.DB_HOST,
         dialect: 'mysql' // or 'postgres', 'sqlite'
@@ -45,14 +45,12 @@ async function connectDB() {
     }
     
     return sequelize;
-}
+}`,
 
-module.exports = connectDB;`,
+    auth: `import { createDolphinAuthController } from 'dolphin-server-modules/auth-controller';
+import { createDolphinRouter } from 'dolphin-server-modules/router';
 
-    auth: `const { createDolphinAuthController } = require('dolphin-server-modules/auth-controller');
-const { createDolphinRouter } = require('dolphin-server-modules/router');
-
-function setupAuth(dbAdapter, config) {
+export function setupAuth(dbAdapter, config) {
     const router = createDolphinRouter();
     const auth = createDolphinAuthController(dbAdapter, config);
     
@@ -62,13 +60,11 @@ function setupAuth(dbAdapter, config) {
     router.get('/me', auth.requireAuth, (ctx) => ctx.json(ctx.req.user));
     
     return router;
-}
+}`,
 
-module.exports = setupAuth;`,
+    crud: (name: string) => `import { createCRUD } from 'dolphin-server-modules/crud';
 
-    crud: (name: string) => `const { createCRUD } = require('dolphin-server-modules/crud');
-
-function setup${name}CRUD(dbAdapter) {
+export function setup${name}CRUD(dbAdapter) {
     const service = createCRUD(dbAdapter, { enforceOwnership: false });
     const COLLECTION = '${name}';
     
@@ -79,15 +75,113 @@ function setup${name}CRUD(dbAdapter) {
         update: async (ctx) => ctx.json(await service.updateOne(COLLECTION, ctx.params.id, ctx.body)),
         delete: async (ctx) => ctx.json(await service.deleteOne(COLLECTION, ctx.params.id))
     };
-}
-
-module.exports = setup${name}CRUD;`
+}`
 };
 
 async function run() {
     switch (command) {
+        case 'generate':
+            const requestedModel = args.find(arg => arg.startsWith('--model='))?.split('=')[1] || 'gemini-flash-latest';
+            const prompt = args.filter(arg => !arg.startsWith('--')).slice(1).join(' ');
+            const apiKey = process.env.GEMINI_API_KEY;
+
+            if (!apiKey) {
+                console.log('❌ Error: GEMINI_API_KEY environment variable is not set.');
+                console.log('💡 Get a free key at: https://aistudio.google.com/app/apikey');
+                break;
+            }
+
+            if (!prompt) {
+                console.log('❌ Please provide a prompt. Example: dolphin generate "a library management system"');
+                break;
+            }
+
+            const fallbackModels = ['gemini-flash-latest', 'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-pro-latest'];
+            const modelsToTry = [requestedModel, ...fallbackModels.filter(m => m !== requestedModel)];
+            const versions = ['v1beta', 'v1'];
+            
+            const tryGenerate = (modelIndex: number, versionIndex: number) => {
+                if (modelIndex >= modelsToTry.length) {
+                    console.log('❌ All AI models failed. Please ensure Generative Language API is enabled in Google AI Studio for your key.');
+                    return;
+                }
+
+                if (versionIndex >= versions.length) {
+                    return tryGenerate(modelIndex + 1, 0);
+                }
+
+                const currentModel = modelsToTry[modelIndex];
+                const currentVersion = versions[versionIndex];
+                console.log(`🤖 AI (${currentModel} via ${currentVersion}) is swimming with Dolphin...`);
+
+                const aiData = JSON.stringify({
+                    contents: [{ parts: [{ text: `Generate a production-ready Node.js file using dolphin-server-modules. 
+                    Rules:
+                    1. Use ESM 'import' instead of 'require'.
+                    2. Use 'const app = createDolphinServer();' from 'dolphin-server-modules/server'.
+                    3. Use unified context '(ctx) => { ... }' instead of '(req, res)'.
+                    4. Return objects directly for JSON response.
+                    5. No markdown backticks, no explanations.
+                    Context: ${prompt}. Return ONLY raw JS code.` }] }]
+                });
+
+                const options = {
+                    hostname: 'generativelanguage.googleapis.com',
+                    path: `/${currentVersion}/models/${currentModel}:generateContent?key=${apiKey}`,
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                };
+
+                const req = https.request(options, (res) => {
+                    let body = '';
+                    res.on('data', (d) => body += d);
+                    res.on('end', () => {
+                        try {
+                            const json = JSON.parse(body);
+                            if (json.error) {
+                                console.log(`⚠️ ${currentModel} (${currentVersion}) unavailable. Error: ${json.error.status}. Trying next...`);
+                                tryGenerate(modelIndex, versionIndex + 1);
+                                return;
+                            }
+                        const rawCode = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                            if (rawCode) {
+                            const codeMatch = rawCode.match(/(\/\*[\s\S]*?\*\/|\/\/.*|[\s\S])*?(import|const|let|var|app|function)[\s\S]*/);
+                            const code = (codeMatch ? codeMatch[0] : rawCode).replace(/```javascript|```js|```/g, '').trim();
+                                fs.writeFileSync(path.join(process.cwd(), 'ai-generated-app.js'), code);
+                                console.log(`✅ Success! Code generated using ${currentModel} in ai-generated-app.js`);
+                            } else {
+                                tryGenerate(modelIndex, versionIndex + 1);
+                            }
+                        } catch (e) { tryGenerate(modelIndex, versionIndex + 1); }
+                    });
+                });
+                req.on('error', () => tryGenerate(modelIndex, versionIndex + 1));
+                req.write(aiData);
+                req.end();
+            };
+
+            tryGenerate(0, 0);
+            break;
+
+        case 'clean':
+            const filesToClean = ['ai-generated-app.js', 'ai-test-output.js'];
+            filesToClean.forEach(file => {
+                const filePath = path.join(process.cwd(), file);
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                    console.log(`🗑️ Deleted: ${file}`);
+                }
+            });
+            console.log('✅ Cleanup complete.');
+            break;
+
         case 'serve':
-            const port = parseInt(args.find(arg => arg.startsWith('--port='))?.split('=')[1] || '3000');
+            let portStr = args.find(arg => arg.startsWith('--port='))?.split('=')[1];
+            if (!portStr) {
+                const portIdx = args.indexOf('--port');
+                if (portIdx !== -1 && args[portIdx + 1]) portStr = args[portIdx + 1];
+            }
+            const port = parseInt(portStr || '3000');
             const rt = new RealtimeCore({ debug: true });
             const server = createDolphinServer({ realtime: rt });
             server.get('/', (ctx) => ctx.html('<h1>Dolphin CLI Static Server</h1>'));
@@ -102,10 +196,17 @@ async function run() {
                     name: path.basename(process.cwd()),
                     version: '1.0.0',
                     main: 'app.js',
-                    dependencies: { "dolphin-server-modules": "^2.2.2" }
+                    type: 'module',
+                    dependencies: { 
+                        "dolphin-server-modules": "^2.2.2",
+                        "mongoose": "^8.0.0",
+                        "zod": "^3.22.0"
+                    }
                 }, null, 2));
+                console.log('✅ Created package.json with core dependencies.');
+            } else {
+                console.log('⚠️ package.json already exists. Skipping...');
             }
-            console.log('✅ Created app.js and initial setup.');
             break;
 
         case 'add':
@@ -126,7 +227,8 @@ async function run() {
                 fs.writeFileSync(path.join(process.cwd(), 'auth-router.js'), TEMPLATES.auth);
                 console.log('✅ Added Auth Controller template to auth-router.js');
             } else if (type === 'crud') {
-                fs.writeFileSync(path.join(process.cwd(), `${name.toLowerCase()}-crud.js`), (TEMPLATES.crud as any)(name));
+                const crudTemplate = typeof TEMPLATES.crud === 'function' ? TEMPLATES.crud(name) : '';
+                fs.writeFileSync(path.join(process.cwd(), `${name.toLowerCase()}-crud.js`), crudTemplate);
                 console.log(`✅ Added CRUD Controller template for "${name}" to ${name.toLowerCase()}-crud.js`);
             } else {
                 console.log('❌ Unknown type. Use "adapter", "auth", or "crud".');
@@ -140,9 +242,12 @@ async function run() {
 Commands:
   serve              Start a basic development server
   init               Bootstrap a new Dolphin project
+  generate <prompt>  AI-powered API generation (requires GEMINI_API_KEY)
+  clean              Remove AI generated files
   add adapter <type> Add a database adapter (mongoose, sequelize)
   add auth           Add a pre-configured Auth controller
   add crud <Name>    Add a pre-configured CRUD controller
+  generate "prompt" --model=gemini-1.5-pro (Custom AI model support)
   
 Options:
   --port=3000        Specify port for serve command
