@@ -1,4 +1,4 @@
-# 🐬 Dolphin Framework (v2.2.2)
+# 🐬 Dolphin Framework (v2.2.5)
 
 ![NPM Version](https://img.shields.io/npm/v/dolphin-server-modules?color=blue&style=flat-square)
 ![Build Status](https://img.shields.io/github/actions/workflow/status/Phuyalshankar/dolphin-server-modules/main.yml?style=flat-square)
@@ -25,8 +25,8 @@ Dolphin Framework को विस्तृत र आधिकारिक ग�
 - **Universal Compatibility**: Works with Mongoose, Zod, WebSocket, and Express-compatible middleware.
 - **Multi-Handler Middleware**: Support for Express-style middleware chains `(ctx, next)`.
 - **Auto-JSON Serialization**: Simply `return` an object from your handler!
-- **Industrial IoT (IIoT)**: Native support for HL7, Modbus, and DICOM via binary plugins.
-- **Unified Context (ctx)**: Modern developer experience with legacy middleware support.
+- **Reactive State Sync (DolphinStore)**: Automated frontend state synchronization with built-in loading/error tracking and filtering.
+- **Offline Persistence**: Built-in support for localStorage/IndexedDB caching.
 - **Server-Served Client Library**: Zero-dependency frontend library for API, Auth, and Realtime—directly from your server.
 
 ---
@@ -36,15 +36,22 @@ Dolphin Framework को विस्तृत र आधिकारिक ग�
 npm install dolphin-server-modules
 ```
 
-### 🛠️ CLI Usage (New in v2.2.1)
-Run a Dolphin server instantly from any project:
+### 🛠️ CLI Usage (v2.2.5)
+Bootstrap a new project or run a server instantly:
 ```bash
-npx dolphin-server --port=8080
+# Initialize a new project
+npx dolphin init
+
+# Scaffold a production project structure
+npx dolphin init-prod
+
+# Start a server instantly
+npx dolphin serve --port=8080
 ```
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Modern ESM)
 
 ### 1. High-Performance Web Server
 ```typescript
@@ -53,108 +60,58 @@ import { createDolphinServer } from 'dolphin-server-modules/server';
 const app = createDolphinServer();
 
 app.get('/ping', (ctx) => {
-  return { message: 'pong', version: '1.5.6' };
+  return { message: 'pong', version: '2.2.5' };
 });
 
 app.listen(3000, () => console.log("🐬 Dolphin swimming on port 3000"));
 ```
 
-### 2. Full-stack Client Library (No NPM needed!)
-Dolphin now serves its own client-side library. Just include a script tag and you get Auth, API, and Realtime out of the box.
+### 2. Reactive Frontend Store (New in v2.2.5)
+The Dolphin client library now includes a powerful reactive store that syncs with your database and provides loading/error states.
 
 ```html
-<!-- In your index.html -->
+<!-- index.html -->
 <script src="/dolphin-client.js"></script>
 
 <script>
   async function init() {
-    // 1. Auth & Token Management
-    await dolphin.auth.login("admin@test.com", "password123");
+    // 1. Setup Collection
+    const products = dolphin.store.products;
 
-    // 2. API with Dynamic Proxy (New in v2.2)
-    const products = await dolphin.api.products(); 
-    const profile  = await dolphin.api.users.profile(); 
-    await dolphin.api.products.post({ name: "Dolphin" });
-    await dolphin.api.call.get(); // Smart proxy handles reserved keywords like 'call' or 'apply'
+    // 2. State Tracking (Reactive)
+    if (products.loading) console.log("Loading products...");
+    if (products.error) console.log("Error:", products.error);
 
-    // 3. Advanced Realtime (v2.2)
-    await dolphin.connect();
-    
-    // Subscribe with cleanup support
-    const onTemp = (val) => console.log(val);
-    dolphin.subscribe('sensors/temp', onTemp);
-    // ... later
-    dolphin.unsubscribe('sensors/temp', onTemp);
+    // 3. Powerful Filtering & Sorting (Local & Reactive)
+    products
+        .where(p => p.price > 100)
+        .orderBy('name', 'asc');
 
-    // High-frequency data (30,000+ msgs/sec)
-    dolphin.pubPush('sensors/temp', { val: 24.5 });
+    // items array always reflects current filter/sort + realtime updates
+    console.log(products.items); 
 
-    // Demand-based pulling (Data saving)
-    dolphin.subscribe('pull:response/logs', (history) => console.log(history));
-    dolphin.subPull('logs', 50);
-
-    // Chunked File Transfer with Resume support
-    dolphin.subscribe('file:chunk/map-data', (chunk) => {
-        console.log(`Downloaded ${chunk.chunkIndex}/${chunk.totalChunks}`);
-    });
-    dolphin.subFile('map-data');
+    // 4. Offline Persistence (Optional Plugin)
+    // Add dolphin-persist.js for offline cache
   }
 </script>
 ```
 
-### 3. Full CRUD API with Mongoose (v1.7.0)
+---
 
-> **Important:** Use `enforceOwnership: false` for public APIs (no auth required).
-> Default is `true` — requires `userId` from auth middleware.
-> 
-> Use `createCRUD()` for the service layer, or `createCrudController()` for ready-to-use route handlers.
+## 🧩 DolphinPersist - Offline Caching
+Include `dolphin-persist.js` to enable zero-config offline support for your store.
 
-```typescript
-import { createDolphinServer } from 'dolphin-server-modules/server';
-import { createMongooseAdapter } from 'dolphin-server-modules/adapters/mongoose';
-import { createCRUD } from 'dolphin-server-modules/crud';
-import mongoose from 'mongoose';
+```html
+<script src="/dolphin-client.js"></script>
+<!-- You can serve this file or include it from your assets -->
+<script src="scripts/dolphin-persist.js"></script>
 
-// 1. Connect MongoDB
-await mongoose.connect(process.env.MONGO_URI!);
-
-// 2. Define Model
-const Product = mongoose.model('Product', new mongoose.Schema({
-  name: String, price: Number, category: String
-}));
-
-// 3. Create adapter + CRUD service
-const db = createMongooseAdapter({ User, RefreshToken, models: { Product } });
-const crud = createCRUD(db, { enforceOwnership: false }); // public API
-
-// 4. Wire routes
-const app = createDolphinServer();
-
-app.get('/products',      async (ctx) => ctx.json(await crud.read('Product')));
-app.get('/products/:id',  async (ctx) => {
-  const item = await crud.readOne('Product', ctx.params.id);
-  if (!item) return ctx.status(404).json({ error: 'Not Found' });
-  ctx.json(item);
-});
-app.post('/products',     async (ctx) => ctx.status(201).json(await crud.create('Product', ctx.body)));
-app.put('/products/:id',  async (ctx) => ctx.json(await crud.updateOne('Product', ctx.params.id, ctx.body)));
-app.delete('/products/:id', async (ctx) => ctx.json(await crud.deleteOne('Product', ctx.params.id)));
-
-app.listen(3000);
-```
-
-### 3. Industrial IoT (Modbus/HL7) Support
-```typescript
-import { RealtimeCore } from 'dolphin-server-modules/realtime';
-import { ModbusPlugin, HL7Plugin } from 'dolphin-server-modules/realtime/plugins';
-
-const rt = new RealtimeCore();
-rt.use(ModbusPlugin);
-rt.use(HL7Plugin);
-
-rt.subscribe('factory/machine/+', (data) => {
-  console.log(`Sensor Data:`, data.payload.value);
-});
+<script>
+  const persist = new DolphinPersist({ driver: 'indexeddb' }); // or 'localstorage'
+  enablePersist(dolphin.store, persist);
+  
+  // Now dolphin.store will load from cache instantly before fetching from server
+</script>
 ```
 
 ---
@@ -166,7 +123,7 @@ rt.subscribe('factory/machine/+', (data) => {
 | **Server** | `dolphin-server-modules/server` | Native HTTP server with `ctx` API & Auto-JSON. |
 | **Router** | `dolphin-server-modules/router` | Standalone sub-routers with multi-handler support. |
 | **Auth** | `dolphin-server-modules/auth` | Argon2/JWT based secure auth with 2FA (TOTP). |
-| **CRUD** | `dolphin-server-modules/crud` | Generic CRUD service with ownership & soft-delete. |
+| **CRUD** | `dolphin-server-modules/curd` | Generic CRUD service with ownership & soft-delete. |
 | **Auth Controller** | `dolphin-server-modules/auth-controller` | Pre-built auth routes (register, login, refresh). |
 | **Realtime** | `dolphin-server-modules/realtime` | Pub/Sub engine with `TopicTrie` & binary codecs. |
 | **Validation** | `dolphin-server-modules/middleware/zod` | Type-safe Zod validation middleware. |
@@ -174,136 +131,16 @@ rt.subscribe('factory/machine/+', (data) => {
 | **IoT Plugins** | `dolphin-server-modules/realtime/plugins` | Native parsers for HL7, Modbus, and DICOM. |
 | **Signaling** | `dolphin-server-modules/signaling` | Universal WebRTC & Control Signaling module. |
 | **Mongoose Adapter** | `dolphin-server-modules/adapters/mongoose` | Full Mongoose ↔ CRUD bridge with query mapping. |
-| **Client Lib** | `/dolphin-client.js` | Zero-dependency full-stack JS client (auto-served by server). Includes API proxy, Auth, Realtime (pub/sub, pubPush, subPull), File transfer with resume. |
-
-### 🧩 How to use individual modules:
-```javascript
-// Example: Using only the Auth module in Express/Fastify
-const { createDolphinAuth } = require('dolphin-server-modules/auth');
-```
-
----
-
-## 🛡️ Auth Module - 2FA with Recovery Codes
-
-Dolphin supports TOTP-based 2FA with recovery codes for account recovery:
-
-```typescript
-const auth = createAuth({ secret: process.env.ENCRYPTION_KEY, issuer: 'MyApp' });
-
-// Enable 2FA for user
-const { secret, uri } = await auth.enable2FA(db, userId);
-// Scan QR code with authenticator app
-
-// Verify and activate
-const { recoveryCodes } = await auth.verify2FA(db, userId, '123456');
-// recoveryCodes: ['A3B2-C4D5', 'E6F7-G8H9', ...] (8 codes)
-
-// Disable 2FA
-await auth.disable2FA(db, userId, '123456');
-
-// Regenerate recovery codes
-const { recoveryCodes } = await auth.regenerateRecoveryCodes(db, userId, '123456');
-```
-
-### secureCookies Configuration
-
-```typescript
-const auth = createAuth({ 
-  secret: process.env.ENCRYPTION_KEY,
-  secureCookies: process.env.NODE_ENV === 'production' // true in prod
-});
-```
-
----
-
-## ⚠️ Important: `enforceOwnership` Option
-
-The `createCRUD` function has `enforceOwnership: true` by default. This means **every operation requires a `userId`** (from auth middleware). For public APIs, set it to `false`:
-
-```typescript
-// Public API — no auth needed
-const crud = createCRUD(db, { enforceOwnership: false });
-
-// Protected API — requires auth middleware to set ctx.req.user
-const crud = createCRUD(db, { enforceOwnership: true });
-```
-
-### Soft Delete
-
-Enable soft delete to keep data but hide from queries:
-
-```typescript
-const crud = createCRUD(db, { 
-  enforceOwnership: true,
-  softDelete: true  // Records marked with `deletedAt` timestamp
-});
-
-// Delete (soft) — sets deletedAt timestamp
-await crud.deleteOne('Product', id);
-
-// Restore — removes deletedAt
-await crud.restore('Product', id);
-```
-
-### Realtime Database Sync
-
-Broadcast CRUD changes to connected clients automatically:
-
-```typescript
-const crud = createCRUD(db, { 
-  enforceOwnership: true,
-  realtime: rt  // RealtimeCore instance
-});
-
-// On create/update/delete, automatically publishes:
-// - db:sync/product { type: 'create', data: {...} }
-// - db:sync/product { type: 'update', data: {...} }
-// - db:sync/product { type: 'delete', data: {...} }
-
-// Client subscribes:
-dolphin.subscribe('db:sync/product', (update) => {
-  console.log(update.type, update.data);
-});
-```
-
----
-
-## 🛣️ Advanced Middleware & Sub-Routing
-
-```typescript
-import { createDolphinRouter } from 'dolphin-server-modules/router';
-import { createDolphinAuthController } from 'dolphin-server-modules/auth-controller';
-
-const auth = createDolphinAuthController(db, config);
-const apiV1 = createDolphinRouter();
-
-// Multi-handler: middleware + route handler
-apiV1.get('/me', auth.requireAuth, async (ctx) => {
-  return { user: ctx.req.user };
-});
-
-const mainApp = createDolphinServer();
-mainApp.use('/api/v1', apiV1);
-```
+| **Client Lib** | `/dolphin-client.js` | Zero-dependency full-stack JS client. Includes **Reactive Store (DolphinStore)** with filter/sort and loading states. |
 
 ---
 
 ## 🧪 Testing
-
 The project uses **Jest** with **ts-jest**. Integration tests use `mongodb-memory-server` for real Mongoose testing without an external database.
 
 ```bash
-npm test          # Run all 167 tests (12 suites)
+npm test          # Run all 200+ tests
 ```
-
-| Suite | Tests |
-| :--- | :--- |
-| `adapters/mongoose/integration.test.ts` | 23 (real Mongoose) |
-| `adapters/mongoose/index.test.ts` | 7 |
-| `auth/auth.test.ts` | — |
-| `curd/crud.test.ts` | — |
-| + 8 more suites | — |
 
 ---
 
@@ -313,7 +150,7 @@ npm test          # Run all 167 tests (12 suites)
 | :--- | :--- | :--- | :--- |
 | Express.js | ~15,000 | 180ms | N/A |
 | Fastify | ~35,000 | 90ms | ~10,000 msgs/sec |
-| **Dolphin V2** | **45,000+** | **< 10ms** | **35,000+ msgs/sec** |
+| **Dolphin V2.2** | **45,000+** | **< 10ms** | **35,000+ msgs/sec** |
 
 ---
 
@@ -326,10 +163,10 @@ npm test          # Run all 167 tests (12 suites)
 - [x] Real Mongoose adapter with `$like`, `id→_id` query mapping
 - [x] Integration test suite with `mongodb-memory-server`
 - [x] **Server-Served Client Library**: `/dolphin-client.js` auto-serve
-- [x] **Recovery Codes**: 2FA backup codes
-- [x] **Soft Delete**: Soft delete with restore
-- [x] **Realtime DB Sync**: Auto-broadcast CRUD changes
-- [ ] **Dolphin CLI**: `npx dolphin init` for automated scaffolding
+- [x] **Reactive Store (DolphinStore)**: Filter, Sort, and State tracking
+- [x] **Offline Persistence**: DolphinPersist plugin
+- [x] **Dolphin CLI**: `npx dolphin init` and `init-prod`
+- [ ] **AI-Driven Generation**: Advanced multi-file AI project scaffolding
 
 ---
 

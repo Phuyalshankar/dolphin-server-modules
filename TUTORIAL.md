@@ -1,122 +1,123 @@
-# Dolphin Framework Tutorial 🐬 (v2.0.0)
+# Dolphin Framework Tutorial 🐬 (v2.2.5)
 
 Welcome to the official tutorial for the **Dolphin Framework**. This guide will take you from zero to a production-ready API using native, high-performance modules.
 
 ---
 
 ## 1. Project Setup
+
+Dolphin v2.2.5 makes it easier than ever to start a project using the CLI.
+
 ```bash
+# 1. Create directory
 mkdir my-dolphin-app && cd my-dolphin-app
-npm init -y
-npm install dolphin-server-modules mongoose zod
+
+# 2. Initialize project (ESM by default)
+npx dolphin init
+
+# 3. For a structured production setup:
+npx dolphin init-prod
 ```
 
-If using TypeScript:
-```bash
-npm install -D typescript ts-node @types/node
-```
+This will automatically create `package.json` (with `"type": "module"`), `app.js`, and basic folders.
 
 ---
 
-## 2. Database Setup (Mongoose)
+## 2. Basic Server (Hello World)
 
-```typescript
-// models.ts
-import mongoose from 'mongoose';
+Using modern ESM syntax:
 
-const UserSchema = new mongoose.Schema({
-  email:    { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-});
-
-const RefreshTokenSchema = new mongoose.Schema({
-  token:  String,
-  userId: String,
-});
-
-const ProductSchema = new mongoose.Schema({
-  name:      String,
-  price:     Number,
-  category:  String,
-});
-
-export const User         = mongoose.model('User', UserSchema);
-export const RefreshToken = mongoose.model('RefreshToken', RefreshTokenSchema);
-export const Product      = mongoose.model('Product', ProductSchema);
-```
-
----
-
-## 3. Initialize Dolphin Server
-
-```typescript
-// index.ts
+```javascript
+// app.js
 import { createDolphinServer } from 'dolphin-server-modules/server';
-import { createMongooseAdapter } from 'dolphin-server-modules/adapters/mongoose';
-import { createCRUD } from 'dolphin-server-modules/crud';
-import { User, RefreshToken, Product } from './models';
 
 const app = createDolphinServer();
 
-// Create Mongoose adapter
-const db = createMongooseAdapter({
-  User,
-  RefreshToken,
-  models: { Product }
+app.get('/', (ctx) => {
+  return { message: "Welcome to the world of Dolphin! 🐬", version: "2.2.5" };
 });
 
-// Create CRUD service
-const crud = createCRUD(db, { enforceOwnership: false });
-```
-
----
-
-## 4. Basic CRUD Routes
-
-```typescript
-// GET all products
-app.get('/products', async (ctx) => {
-  const results = await crud.read('Product');
-  ctx.json(results);
-});
-
-// POST create product
-app.post('/products', async (ctx) => {
-  const result = await crud.create('Product', ctx.body);
-  ctx.status(201).json(result);
+app.listen(3000, () => {
+  console.log("Server swimming on http://localhost:3000");
 });
 ```
 
 ---
 
-## 5. Authentication
+## 3. Reactive Frontend Store [NEW v2.2.5]
 
-### Environment Variables (.env)
-First, create a `.env` file in your root directory and add your keys. **Never commit this file.**
-```bash
-ENCRYPTION_KEY=your_long_random_secret_here
-GEMINI_API_KEY=your_gemini_api_key_here
-```
+Dolphin now provides a powerful reactive store in the client library that manages your data and tracking states automatically.
 
 ### Usage
-```typescript
-import { createAuth } from 'dolphin-server-modules/auth';
+```html
+<script src="/dolphin-client.js"></script>
+<script>
+  async function init() {
+    // 1. Get collection
+    const products = dolphin.store.products;
 
-const auth = createAuth({ 
-  secret: process.env.ENCRYPTION_KEY 
+    // 2. State Tracking (Reactive)
+    if (products.loading) console.log("Fetching data...");
+    
+    // 3. Filtering & Sorting
+    // Items are automatically re-sorted/filtered even on realtime updates
+    products
+        .where(p => p.price > 100)
+        .orderBy('price', 'desc');
+
+    // 4. Using data
+    console.log(products.items);
+  }
+</script>
+```
+
+---
+
+## 4. Offline Persistence [NEW v2.2.5]
+
+Enable instant loading by caching your store data locally using the `DolphinPersist` plugin.
+
+```html
+<script src="/dolphin-client.js"></script>
+<script src="path/to/dolphin-persist.js"></script>
+
+<script>
+  // Setup persistence with IndexedDB
+  const persist = new DolphinPersist({ driver: 'indexeddb' });
+  enablePersist(dolphin.store, persist);
+  
+  // Data will now load from cache instantly before syncing with server
+</script>
+```
+
+---
+
+## 5. Database Integration (Mongoose)
+
+Dolphin provides an automated bridge to Mongoose.
+
+```javascript
+import { createMongooseAdapter } from 'dolphin-server-modules/adapters/mongoose';
+import { createCRUD } from 'dolphin-server-modules/curd';
+
+// 1. Setup adapter
+const db = createMongooseAdapter({ User, Product });
+
+// 2. Create CRUD service
+const crud = createCRUD(db, { 
+    enforceOwnership: false,
+    realtime: true // Sync with DolphinStore automatically
 });
 
-// Secure a route
-app.get('/profile', auth.requireAuth, async (ctx) => {
-  return { user: ctx.req.user };
-});
+// 3. Register routes
+app.get('/products', async (ctx) => ctx.json(await crud.read('Product')));
 ```
 
 ---
 
 ## 6. Realtime & IoT Integration
 
-```typescript
+```javascript
 import { RealtimeCore, JSONPlugin } from 'dolphin-server-modules/realtime';
 
 const rt = new RealtimeCore();
@@ -133,71 +134,8 @@ rt.publish('sensors/temp', { value: 24.5 });
 
 ---
 
-## 7. Universal Signaling (WebRTC & IoT)
+## 7. Conclusion
 
-```typescript
-import { createSignaling } from 'dolphin-server-modules/signaling';
-
-const signaling = createSignaling(rt);
-
-// IoT / Medical Command
-await signaling.sendCommand('DoctorApp', 'ECG_Monitor', { action: 'START' });
-```
-
----
-
-## 8. Dolphin Client Library (Full-stack) [NEW]
-
-Dolphin now serves its own lightweight, zero-dependency client library directly from the server.
-
-### Load the Library
-Include this in your HTML file:
-```html
-<script src="/dolphin-client.js"></script>
-```
-
-### Usage (API, Auth & Realtime)
-```javascript
-// The 'dolphin' object is auto-initialized globally
-async function startApp() {
-  // 1. Auth: Seamless Login
-  await dolphin.auth.login("admin@test.com", "password123");
-
-  // 2. API: Dynamic Proxy (Native style)
-  const products = await dolphin.api.products(); 
-  // Equivalent to: await dolphin.api.get('/products');
-
-  // Nested paths & explicit methods
-  const profile = await dolphin.api.users.profile(); // -> /users/profile
-  await dolphin.api.products.post({ name: "Dolphin" }); 
-
-  // Traditional way still works
-  const data = await dolphin.api.get('/products');
-
-  // 3. Realtime: Mirroring & Signaling
-  await dolphin.connect();
-  
-  // High-frequency "Sensor" Push
-  dolphin.pubPush('iot/heartrate', { bpm: 72 });
-
-  // Demand-based history Pull
-  dolphin.subscribe('pull:response/logs', (batch) => {
-      console.log("Buffered logs received:", batch);
-  });
-  dolphin.subPull('logs', 20); // Get last 20 logs
-
-  // Managed File Download (v2.0)
-  dolphin.subscribe('file:chunk/report', (chunk) => {
-      console.log(`Progress: ${chunk.chunkIndex}/${chunk.totalChunks}`);
-  });
-  dolphin.subFile('report');
-}
-```
-
----
-
-## 9. Conclusion
-
-Dolphin Framework is built for speed, modularity, and ease of use. Whether you are building a simple API or a complex real-time signaling system, Dolphin has the tools you need.
+Dolphin Framework is built for speed, modularity, and ease of use. With the new v2.2.5 features, you have a complete full-stack synchronization engine for modern web apps.
 
 Happy Coding! 🐬

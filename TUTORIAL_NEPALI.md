@@ -1,4 +1,4 @@
-# Dolphin Framework: 0 to 100% Full Tutorial (Nepali) 🐬 [v1.7.0]
+# Dolphin Framework: 0 to 100% Full Tutorial (Nepali) 🐬 [v2.2.5]
 
 Dolphin Framework मा तपाईँलाई स्वागत छ! यो गाइडमा हामी Dolphin प्रयोग गरेर एउटा शक्तिशाली, छिटो र आधुनिक API कसरी बनाउने भनेर सुरुदेखि अन्त्यसम्म सिक्नेछौँ।
 
@@ -6,44 +6,47 @@ Dolphin Framework मा तपाईँलाई स्वागत छ! यो
 
 ## १. Dolphin के हो? (Introduction)
 
-**Dolphin** एउटा "Zero-Dependency" ब्याकइन्ड फ्रेमवर्क हो। यो Node.js को नेटिभ `http` मोड्युलमा बनेको छ, जसले गर्दा यसको स्पिड एकदमै धेरै छ।
+**Dolphin** एउटा "Zero-Dependency" ब्याकइन्ड फ्रेमवर्क हो। यो Node.js को नेटिभ `http` मोड्युलमा बनेको छ, जसले गर्दा यसको स्पिड एकदमै धेरै छ र यो २०२६ को आधुनिक आवश्यकताहरूका लागि तयार छ।
 
 **मुख्य विशेषताहरू:**
-- **Zero-Dependency Core**: बाहिरी भारी लाइब्रेरीहरू प्रयोग नगरी नेटिभ Node.js मा आधारित।
-- **Ultra-Fast**: एक्सप्रेस (Express) भन्दा धेरै गुणा छिटो।
-- **100% Modular**: तपाईँलाई जे चाहिन्छ, त्यही मात्र प्रयोग गर्न सकिन्छ (Auth, CRUD, Routing सबै छुट्टाछुट्टै छन्)।
+- **Ultra-Fast**: एक्सप्रेस (Express) भन्दा ५ गुणा सम्म छिटो।
+- **Reactive Sync**: फ्रन्टइन्ड र ब्याकइन्डको डेटा अटोमेटिक सिङ्क हुने।
+- **Offline Ready**: इन्टरनेट नहुँदा पनि डेटा सेभ गर्न मिल्ने (DolphinPersist)।
+- **Modern CLI**: एकै मिनेटमा प्रोजेक्ट तयार गर्न मिल्ने।
 
 ---
 
 ## २. सुरुवाती सेटअप (Project Setup)
 
-सबैभन्दा पहिले एउटा नयाँ फोल्डर बनाउनुहोस् र प्रोजेक्ट सुरु गर्नुहोस्:
+Dolphin v2.2.5 मा नयाँ CLI कमाण्डहरू थपिएका छन् जसले प्रोजेक्ट सुरु गर्न एकदमै सजिलो बनाउँछ:
 
 ```bash
-# १. फोल्डर बनाउनुहोस् र भित्र जानुहोस्
+# १. नयाँ फोल्डर बनाउनुहोस्
 mkdir my-dolphin-app && cd my-dolphin-app
 
-# २. npm प्रोजेक्ट सुरु गर्नुहोस्
-npm init -y
+# २. डल्फिन प्रोजेक्ट सुरु गर्नुहोस् (ESM support सहित)
+npx dolphin init
 
-# ३. आवश्यक प्याकेजहरू इन्स्टल गर्नुहोस्
-npm install dolphin-server-modules mongoose zod
+# ३. यदि तपाईंलाई 'Production' लेबलको फोल्डर स्ट्रक्चर चाहिन्छ भने:
+npx dolphin init-prod
 ```
+
+यसले अटोमेटिकल्ली `package.json`, `app.js` र आवश्यक कन्फिगरेसन फाइलहरू बनाइदिन्छ।
 
 ---
 
 ## ३. पहिलो सर्भर (Hello World)
 
-अब `index.ts` (वा `index.js`) फाइल बनाउनुहोस् र यो कोड राख्नुहोस्:
+अब `app.js` फाइलमा यो कोड राख्नुहोस् (हामी आधुनिक `import` सिन्ट्याक्स प्रयोग गर्छौं):
 
-```typescript
+```javascript
 import { createDolphinServer } from 'dolphin-server-modules/server';
 
 const app = createDolphinServer();
 
-// एउटा सामान्य गेट (GET) रूट (v1.4.7: अब सिधै डाटा रिटर्न गर्न सकिन्छ!)
+// एउटा सामान्य गेट (GET) रूट
 app.get('/', (ctx) => {
-  return { message: "Dolphin को संसारमा स्वागत छ! 🐬" };
+  return { message: "Dolphin को संसारमा स्वागत छ! 🐬", version: "2.2.5" };
 });
 
 // सर्भर सुन्न (Listen) सुरु गर्नुहोस्
@@ -52,224 +55,93 @@ app.listen(3000, () => {
 });
 ```
 
-तपाईँको सर्भर अब तयार भयो! `npx ts-node index.ts` चलाएर चेक गर्न सक्नुहुन्छ।
-
 ---
 
-## ४. Context (ctx) बुझ्ने
+## ४. DolphinStore: शक्तिशाली र रिएक्टिभ स्टोर [NEW v2.2.5]
 
-Dolphin मा हामी `req` र `res` को सट्टा `ctx` (Context) प्रयोग गर्छौँ। यसले कोडलाई सफा बनाउँछ।
+Dolphin को नयाँ स्टोरले फ्रन्टइन्डमा डेटा म्यानेजमेन्टलाई एकदमै सजिलो बनाउँछ। यसले डेटा लोड हुँदैछ कि छैन (loading), सफल भयो कि भएन (success) र एरर आयो कि (error) भनेर अटोमेटिक जानकारी दिन्छ।
 
-- `ctx.req`: नेटिभ रिक्वेस्ट अब्जेक्ट।
-- `ctx.json(data)`: JSON रेस्पोन्स पठाउन।
-- `ctx.body`: पोस्ट (POST) फाइल वा डाटाहरु।
-- `ctx.params`: URL बाट आउने प्यारामिटरहरू (जस्तै: `/users/:id`)।
-
----
-
-## ५. राउटिङ र डाइनामिक प्यारामिटर (Routing)
-
-Dolphin को राउटिङ एकदमै शक्तिशाली छ।
-
-```typescript
-// १. डाइनामिक आईडी लिने
-app.get('/users/:id', (ctx) => {
-  const userId = ctx.params.id;
-  ctx.json({ id: userId, name: "Nepal User" });
-});
-
-// २. पोस्ट रिक्वेस्ट (Data पठाउन)
-app.post('/create', (ctx) => {
-  const data = ctx.body;
-  ctx.json({ status: "Received", payload: data });
-});
-```
-
----
-
-## ६. मिडलवेयर (Middleware)
-
-मिडलवेयरले रिक्वेस्टलाई चेक वा मोडिफाइ गर्छ। Dolphin ले "Native Style" र "Express Style" दुवै सपोर्ट गर्छ।
-
-```typescript
-// Dolphin Style Middleware
-app.use((ctx, next) => {
-  console.log(`${ctx.req.method} अनुरोध आयो: ${ctx.req.url}`);
-  next(); // अर्को स्टेपमा जानको लागि अनिवार्य छ
-});
-
-// Express Style (जस्तै: CORS)
-import cors from 'cors';
-app.use(cors()); // सिधै काम गर्छ!
-```
-
----
-
-## ७. डेटाबेस सेटअप (Mongoose Adapter)
-
-Dolphin ले Mongoose सँग सजिलै काम गर्छ।
-
-```typescript
-import mongoose from 'mongoose';
-import { createMongooseAdapter } from 'dolphin-server-modules/adapters/mongoose';
-
-// १. स्किमा (Schema) बनाउनुहोस्
-const UserSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true }
-});
-
-const User = mongoose.model('User', UserSchema);
-
-// २. अड्याप्टर (Adapter) सेटअप गर्नुहोस्
-const db = createMongooseAdapter({ User });
-```
-
----
-
-## ८. अथेन्टिकेसन (Auth Module)
-
-सुरक्षित API को लागि Dolphin भित्रै `auth` मोड्युल छ।
-यसको लागि सबैभन्दा पहिले प्रोजेक्टको रूटमा `.env` फाइल बनाउनुहोस्:
-
-```bash
-ENCRYPTION_KEY=तपाईँको_गोप्य_कि
-GEMINI_API_KEY=तपाईँको_जेमिनाई_कि
-```
-
-```typescript
-import { createAuth } from 'dolphin-server-modules/auth';
-
-const auth = createAuth({ 
-  secret: process.env.ENCRYPTION_KEY 
-});
-
-// कुनै रूटलाई सुरक्षित बनाउन (v1.4.7: मिडलवेयर चेन सपोर्ट!)
-app.get('/profile', auth.requireAuth, async (ctx) => {
-  // यहाँ पुगेको युजर भेरिफाई भइसकेको हुन्छ
-  return { user: ctx.req.user };
-});
-```
-
----
-
-## ९. अटोमेटेड CRUD (Automated API)
-
-Dolphin को सबैभन्दा राम्रो कुरा भनेको अटोमेटिक CRUD हो। तपाईँलाई कोड लेखिरहनु पर्दैन।
-
-```typescript
-// सबै युजरको CRUD अपरेसन अटोमेटिक बनाउनुहोस्
-app.get('/api/users', async (ctx) => {
-  const users = await db.User.find();
-  ctx.json(users);
-});
-// वा Dolphin को CRUD कन्ट्रोलर प्रयोग गर्नुहोस्
-```
-
----
-
-## १०. भ्यालिडेसन (Zod Validation)
-
-युजरले पठाएको डाटाहरू चेक गर्न Zod प्रयोग गर्नुहोस्।
-
-```typescript
-import { z } from 'zod';
-import { validate } from 'dolphin-server-modules/middleware/zod';
-
-const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6)
-});
-
-app.post('/register', validate(registerSchema), (ctx) => {
-  ctx.json({ message: "Valid Data!" });
-});
-```
-
----
-
-## ११. रियलटाइम र IoT (Realtime & IoT Core) [NEW]
-Dolphin ले अब उच्च क्षमताको रियलटाइम कम्युनिकेसन सपोर्ट गर्छ।
-
-```typescript
-import { RealtimeCore, JSONPlugin } from 'dolphin-server-modules/realtime';
-
-const rt = new RealtimeCore();
-rt.use(JSONPlugin);
-
-// टपिकहरूमा सब्सक्राइब (Subscribe) गर्नुहोस्
-rt.subscribe('sensors/+', (ctx) => {
-  console.log(`टपिक: ${ctx.topic}, डाटा:`, ctx.payload);
-});
-
-// पब्लिस (Publish) गर्नुहोस्
-rt.publish('sensors/temp', { value: 24.5 });
-```
-
----
-
-## १२. इन्डिपेन्डेन्ट राउटिङ (Independent Routing) [NEW]
-ठूला एप्लिकेसनहरूलाई व्यवस्थित गर्न अलग-अलग फाइलमा राउट्हरू राख्न सकिन्छ:
-
-```typescript
-// routes.ts
-import { createDolphinRouter } from 'dolphin-server-modules/router';
-export const apiRouter = createDolphinRouter();
-apiRouter.get('/ping', (ctx) => ctx.json({ msg: 'pong' }));
-
-// index.ts
-import { apiRouter } from './routes';
-app.use('/api', apiRouter); // Route अब /api/ping मा उपलब्ध छ
-```
-
----
-
-## १३. Universal Signaling (WebRTC & IoT) [NEW]
-Dolphin v1.6.0 बाट नयाँ "Universal Signaling Module" थपिएको छ जसमा फोन, IoT र मेडिकल डिभाइस कन्ट्रोल गर्न सकिन्छ।
-
-```typescript
-import { createSignaling } from 'dolphin-server-modules/signaling';
-const signaling = createSignaling(rt);
-
-// IoT कमाण्ड पठाउन
-await signaling.sendCommand('DoctorApp', 'Machine_01', { action: 'START' });
-```
-
----
-
-## १५. डल्फिन क्लाइन्ट लाइब्रेरी (Full-stack Client Library) [NEW]
-
-डल्फिन सर्भरले अब आफैँ एउटा हलुका क्लाइन्ट लाइब्रेरी उपलब्ध गराउँछ। यसका लागि तपाईँले NPM इन्स्टल गर्नु पर्दैन।
-
-### क. लाइब्रेरी लोड गर्ने
+### क. स्टोर प्रयोग गर्ने तरिका
 ```html
 <script src="/dolphin-client.js"></script>
+<script>
+  // १. स्टोरबाट कलेक्सन लिने
+  const products = dolphin.store.products;
+
+  // २. लोड स्टेट चेक गर्ने
+  if (products.loading) console.log("डेटा लोड हुँदैछ...");
+  
+  // ३. डेटा आएपछि देखाउने
+  if (products.success) {
+      console.log("डेटा आयो:", products.items);
+  }
+</script>
 ```
 
-### ख. प्रयोग गर्ने तरिका (API, Auth & Realtime)
+### ख. फिल्टर र सर्टिङ (Filtering & Sorting)
+तपाईंले स्टोरमै डेटा फिल्टर र सर्ट गर्न सक्नुहुन्छ, जुन एकदमै 'Reactive' हुन्छ:
+
 ```javascript
-// १. अटो-इनिशियलाइज्ड 'dolphin' अब्जेक्ट प्रयोग गर्नुहोस्
-async function setup() {
-  // २. लगइन गर्ने
-  await dolphin.auth.login("admin@test.com", "password");
+// १. मूल्य १००० भन्दा बढी भएका सामान मात्र फिल्टर गर्ने
+dolphin.store.products.where(p => p.price > 1000);
 
-  // ३. डेटा फेच गर्ने (अटोमेटिक टोकन म्यानेजमेन्ट)
-  const products = await dolphin.api.get('/products');
+// २. नामको आधारमा मिलाउने (A to Z)
+dolphin.store.products.orderBy('name', 'asc');
 
-  // ४. रियल-टाइम पब-सब (Pub/Sub)
-  await dolphin.connect();
-  dolphin.subscribe("alerts", (data) => console.log("Alert:", data));
-}
+// ३. सबै फिल्टर हटाउने
+dolphin.store.products.clear();
 ```
 
 ---
 
-## १६. अन्तिममा (Conclusion)
+## ५. DolphinPersist: अफलाइन क्यासिङ [NEW v2.2.5]
 
-Dolphin Framework निकै छिटो र सजिलो छ। यसले तपाईँको ब्याकइन्ड डेभलपमेन्टको अनुभवलाई नयाँ उचाइमा पुर्‍याउँछ।
+यदि तपाईं इन्टरनेट नहुँदा पनि आफ्नो डेटा स्टोरमा राखिरहन चाहनुहुन्छ भने `DolphinPersist` प्रयोग गर्नुहोस्।
+
+```html
+<script src="/dolphin-client.js"></script>
+<script src="path/to/dolphin-persist.js"></script>
+
+<script>
+  // IndexedDB प्रयोग गरेर अफलाइन क्यासिङ सेट गर्ने
+  const persist = new DolphinPersist({ driver: 'indexeddb' });
+  enablePersist(dolphin.store, persist);
+  
+  // अब पेज रिफ्रेस गर्दा वा इन्टरनेट नहुँदा पनि पुरानो डेटा तुरुन्तै देखिन्छ।
+</script>
+```
+
+---
+
+## ६. अटोमेटेड CRUD (Mongoose सँग)
+
+Dolphin ले डेटाबेससँग काम गर्न अटोमेटेड CRUD सुविधा दिन्छ।
+
+```javascript
+import { createMongooseAdapter } from 'dolphin-server-modules/adapters/mongoose';
+import { createCRUD } from 'dolphin-server-modules/curd';
+
+// १. एड्याप्टर बनाउने
+const db = createMongooseAdapter({ User, Product });
+
+// २. CRUD सर्भिस सुरु गर्ने
+const crud = createCRUD(db, { 
+    enforceOwnership: false, // सबैका लागि खुला गर्न
+    realtime: true           // रियल-टाइम सिङ्क इनेबल गर्न
+});
+
+// ३. रुटहरूमा जोड्ने
+app.get('/products', async (ctx) => ctx.json(await crud.read('Product')));
+```
+
+---
+
+## ७. अन्तिममा (Conclusion)
+
+Dolphin Framework अब एउटा पूर्ण 'Full-stack' ब्याकइन्ड इकोसिस्टम बनेको छ। यसले ब्याकइन्डमा मात्र होइन, फ्रन्टइन्डको डेटा सिङ्क र अफलाइन म्यानेजमेन्टमा पनि मद्दत गर्छ।
 
 **थप जानकारीको लागि:**
 - [Official Documentation](https://github.com/Phuyalshankar/dolphin-server-modules)
-- माथिका सबै स्टेपहरू मिलाएर एउटा `app.ts` फाइल बनाउनुहोस् र रन गर्नुहोस्!
+- [README.md](README.md) हेर्नुहोस्।
 
 **Happy Coding in Nepali! 🇳🇵🐬**
