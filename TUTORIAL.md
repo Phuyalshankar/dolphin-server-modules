@@ -91,10 +91,20 @@ app.post('/products', async (ctx) => {
 
 ## 5. Authentication
 
+### Environment Variables (.env)
+First, create a `.env` file in your root directory and add your keys. **Never commit this file.**
+```bash
+ENCRYPTION_KEY=your_long_random_secret_here
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+### Usage
 ```typescript
 import { createAuth } from 'dolphin-server-modules/auth';
 
-const auth = createAuth({ secret: 'SUPER_SECRET' });
+const auth = createAuth({ 
+  secret: process.env.ENCRYPTION_KEY 
+});
 
 // Secure a route
 app.get('/profile', auth.requireAuth, async (ctx) => {

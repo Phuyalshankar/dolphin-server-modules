@@ -29,10 +29,10 @@ export function encode(data: any): Buffer {
   if (typeof data === 'string') {
     const str = Buffer.from(data);
     const len = str.length;
-    // Simple header: type(1 byte) + len(2 bytes)
-    const b = Buffer.allocUnsafe(3);
+    // Header: type(1 byte) + len(4 bytes)
+    const b = Buffer.allocUnsafe(5);
     b[0] = 2;
-    b.writeUInt16BE(len, 1);
+    b.writeUInt32BE(len, 1);
     return Buffer.concat([b, str]);
   }
 
@@ -50,8 +50,8 @@ export function decode(buf: Buffer): any {
   const t = buf[0];
   if (t === 1) return buf.readInt32BE(1);
   if (t === 2) {
-    const len = buf.readUInt16BE(1);
-    return buf.slice(3, 3 + len).toString();
+    const len = buf.readUInt32BE(1);
+    return buf.slice(5, 5 + len).toString();
   }
   if (t === 3) return JSON.parse(buf.slice(1).toString());
   return buf;

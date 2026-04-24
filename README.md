@@ -189,7 +189,7 @@ const { createDolphinAuth } = require('dolphin-server-modules/auth');
 Dolphin supports TOTP-based 2FA with recovery codes for account recovery:
 
 ```typescript
-const auth = createAuth({ secret: 'SUPER_SECRET', issuer: 'MyApp' });
+const auth = createAuth({ secret: process.env.ENCRYPTION_KEY, issuer: 'MyApp' });
 
 // Enable 2FA for user
 const { secret, uri } = await auth.enable2FA(db, userId);
@@ -210,7 +210,7 @@ const { recoveryCodes } = await auth.regenerateRecoveryCodes(db, userId, '123456
 
 ```typescript
 const auth = createAuth({ 
-  secret: 'SUPER_SECRET',
+  secret: process.env.ENCRYPTION_KEY,
   secureCookies: process.env.NODE_ENV === 'production' // true in prod
 });
 ```

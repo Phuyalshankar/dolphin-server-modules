@@ -29,11 +29,12 @@ export interface BaseDocument {
 // ===== HELPER: Fix ID for Mongoose =====
 const fixId = (query: any): any => {
   if (!query) return query;
-  if (query.id !== undefined) {
-    query._id = query.id;
-    delete query.id;
+  const newQuery = { ...query };
+  if (newQuery.id !== undefined) {
+    newQuery._id = newQuery.id;
+    delete newQuery.id;
   }
-  return query;
+  return newQuery;
 };
 
 // ===== SAFE METHOD CALLS =====

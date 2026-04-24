@@ -1,4 +1,4 @@
-import { createDolphinServer } from '../server/server';
+import { createDolphinServer } from '../src/server/server';
 
 const app = createDolphinServer();
 

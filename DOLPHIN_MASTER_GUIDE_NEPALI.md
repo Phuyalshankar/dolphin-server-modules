@@ -188,7 +188,7 @@ typescript
 import { createAuth } from 'dolphin-server-modules/auth';
 
 const auth = createAuth({
-  secret: 'SUPER_SECRET_KEY',
+  secret: process.env.ENCRYPTION_KEY,
   tokenExpiry: '1h',
   refreshExpiry: '7d'
 });
@@ -236,7 +236,7 @@ import { createCrudController } from 'dolphin-server-modules/curd';
 import mongoose from 'mongoose';
 
 const app = createDolphinServer();
-const auth = createAuth({ secret: 'DOLPHIN_STORE_SECRET' });
+const auth = createAuth({ secret: process.env.ENCRYPTION_KEY });
 
 const Product = mongoose.model('Product', new mongoose.Schema({
   name: String, price: Number, stock: { type: Number, default: 0 }

@@ -75,10 +75,48 @@ export function setup${name}CRUD(dbAdapter) {
         update: async (ctx) => ctx.json(await service.updateOne(COLLECTION, ctx.params.id, ctx.body)),
         delete: async (ctx) => ctx.json(await service.deleteOne(COLLECTION, ctx.params.id))
     };
-}`
+}`,
+
+    authModel: `import mongoose from 'mongoose';
+
+const UserSchema = new mongoose.Schema({
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    name: { type: String },
+    role: { type: String, default: 'user' },
+    is2FAEnabled: { type: Boolean, default: false },
+    twoFASecret: { type: String },
+    recoveryCodes: [{ type: String }],
+    createdAt: { type: Date, default: Date.now }
+});
+
+const RefreshTokenSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    token: { type: String, required: true },
+    expiresAt: { type: Date, required: true },
+    createdAt: { type: Date, default: Date.now }
+});
+
+export const User = mongoose.model('User', UserSchema);
+export const RefreshToken = mongoose.model('RefreshToken', RefreshTokenSchema);`
 };
 
+function loadEnv() {
+    const envPath = path.join(process.cwd(), '.env');
+    if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf8');
+        content.split('\n').forEach(line => {
+            const [key, ...valueParts] = line.split('=');
+            if (key && valueParts.length > 0) {
+                const value = valueParts.join('=').trim().replace(/^["']|["']$/g, '');
+                process.env[key.trim()] = value;
+            }
+        });
+    }
+}
+
 async function run() {
+    loadEnv();
     switch (command) {
         case 'generate':
             const requestedModel = args.find(arg => arg.startsWith('--model='))?.split('=')[1] || 'gemini-flash-latest';
@@ -163,6 +201,79 @@ async function run() {
             tryGenerate(0, 0);
             break;
 
+        case 'generate-full':
+            const fullRequestedModel = args.find(arg => arg.startsWith('--model='))?.split('=')[1] || 'gemini-1.5-flash';
+            const fullPrompt = args.filter(arg => !arg.startsWith('--')).slice(1).join(' ');
+            const fullApiKey = process.env.GEMINI_API_KEY;
+
+            if (!fullApiKey) {
+                console.log('❌ Error: GEMINI_API_KEY environment variable is not set.');
+                break;
+            }
+
+            if (!fullPrompt) {
+                console.log('❌ Please provide a prompt. Example: dolphin generate-full "a laundry management system"');
+                break;
+            }
+
+            console.log(`🤖 AI is architecting a full production-grade system...`);
+
+            const tryGenerateFull = (modelIndex: number, versionIndex: number) => {
+                const currentModel = ['gemini-1.5-flash', 'gemini-1.5-pro'][modelIndex] || 'gemini-1.5-flash';
+                const currentVersion = ['v1beta', 'v1'][versionIndex] || 'v1beta';
+
+                const aiData = JSON.stringify({
+                    contents: [{ parts: [{ text: `Generate a full production-ready modular Node.js project structure using dolphin-server-modules. 
+                    Rules:
+                    1. Return ONLY a valid JSON object.
+                    2. Keys are file paths (e.g., "routes/user.js", "models/User.js", "app.js").
+                    3. Values are the file contents as strings.
+                    4. Use ESM 'import'.
+                    5. Use Dolphin unified context '(ctx) => { ... }'.
+                    6. Include folders: models, controllers, routes, middleware, config.
+                    Context: ${fullPrompt}.` }] }]
+                });
+
+                const options = {
+                    hostname: 'generativelanguage.googleapis.com',
+                    path: `/${currentVersion}/models/${currentModel}:generateContent?key=${fullApiKey}`,
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                };
+
+                const req = https.request(options, (res) => {
+                    let body = '';
+                    res.on('data', (d) => body += d);
+                    res.on('end', () => {
+                        try {
+                            const json = JSON.parse(body);
+                            const rawJson = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                            const jsonMatch = rawJson.match(/\{[\s\S]*\}/);
+                            if (jsonMatch) {
+                                const files = JSON.parse(jsonMatch[0]);
+                                Object.keys(files).forEach(filePath => {
+                                    const fullPath = path.join(process.cwd(), filePath);
+                                    const dirPath = path.dirname(fullPath);
+                                    if (!fs.existsSync(dirPath)) {
+                                        fs.mkdirSync(dirPath, { recursive: true });
+                                    }
+                                    fs.writeFileSync(fullPath, files[filePath]);
+                                    console.log(`📄 Generated: ${filePath}`);
+                                });
+                                console.log('✅ Full project architected successfully! 🐬');
+                            } else {
+                                console.log('❌ AI failed to return a valid project structure. Try again.');
+                            }
+                        } catch (e) { console.log('❌ Error parsing AI response.'); }
+                    });
+                });
+                req.write(aiData);
+                req.end();
+            };
+
+            tryGenerateFull(0, 0);
+            break;
+
         case 'clean':
             const filesToClean = ['ai-generated-app.js', 'ai-test-output.js'];
             filesToClean.forEach(file => {
@@ -207,6 +318,11 @@ async function run() {
             } else {
                 console.log('⚠️ package.json already exists. Skipping...');
             }
+
+            if (!fs.existsSync(path.join(process.cwd(), '.gitignore'))) {
+                fs.writeFileSync(path.join(process.cwd(), '.gitignore'), '.env\nnode_modules\ndist\n.DS_Store');
+                console.log('✅ Created .gitignore');
+            }
             break;
 
         case 'add':
@@ -235,18 +351,66 @@ async function run() {
             }
             break;
 
+        case 'mongo-auth-model':
+            const modelsDir = path.join(process.cwd(), 'models');
+            if (!fs.existsSync(modelsDir)) {
+                fs.mkdirSync(modelsDir);
+            }
+            fs.writeFileSync(path.join(modelsDir, 'auth-models.js'), TEMPLATES.authModel);
+            console.log('✅ Generated fixed Auth models (User, RefreshToken) in models/auth-models.js');
+            break;
+
+        case 'init-prod':
+            console.log('🚀 Scaffolding Production-Ready Dolphin Project...');
+            const dirs = ['models', 'controllers', 'routes', 'middleware', 'services', 'config'];
+            dirs.forEach(dir => {
+                const dirPath = path.join(process.cwd(), dir);
+                if (!fs.existsSync(dirPath)) {
+                    fs.mkdirSync(dirPath);
+                    console.log(`📁 Created: /${dir}`);
+                }
+            });
+
+            // Create basic files in the structure
+            fs.writeFileSync(path.join(process.cwd(), 'app.js'), TEMPLATES.app);
+            fs.writeFileSync(path.join(process.cwd(), 'config', 'db.js'), TEMPLATES.mongoose);
+            
+            if (!fs.existsSync(path.join(process.cwd(), 'package.json'))) {
+                fs.writeFileSync(path.join(process.cwd(), 'package.json'), JSON.stringify({
+                    name: path.basename(process.cwd()),
+                    version: '1.0.0',
+                    main: 'app.js',
+                    type: 'module',
+                    dependencies: { 
+                        "dolphin-server-modules": "^2.2.4",
+                        "mongoose": "^8.0.0",
+                        "zod": "^3.22.0"
+                    }
+                }, null, 2));
+            }
+
+            if (!fs.existsSync(path.join(process.cwd(), '.gitignore'))) {
+                fs.writeFileSync(path.join(process.cwd(), '.gitignore'), '.env\nnode_modules\ndist\n.DS_Store');
+                console.log('✅ Created .gitignore');
+            }
+            console.log('✅ Production scaffolding complete. Start swimming! 🐬');
+            break;
+
         case 'help':
         default:
             console.log(`
 🐬 Dolphin Framework CLI
 Commands:
   serve              Start a basic development server
-  init               Bootstrap a new Dolphin project
-  generate <prompt>  AI-powered API generation (requires GEMINI_API_KEY)
+  init               Bootstrap a basic Dolphin project
+  init-prod          Scaffold a production-grade folder structure
+  generate <prompt>  AI-powered single-file API generation
+  generate-full <prompt> AI-powered full project architecture (folders + files)
   clean              Remove AI generated files
   add adapter <type> Add a database adapter (mongoose, sequelize)
   add auth           Add a pre-configured Auth controller
   add crud <Name>    Add a pre-configured CRUD controller
+  mongo-auth-model   Generate fixed Mongoose models for Auth (User, RefreshToken)
   generate "prompt" --model=gemini-1.5-pro (Custom AI model support)
   
 Options:

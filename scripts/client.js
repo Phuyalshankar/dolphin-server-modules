@@ -217,7 +217,7 @@ class DolphinStore {
     /** @param {DolphinClient} client */
     constructor(client) {
         this.client = client;
-        /** @type {Map<string, any[]>} */
+        /** @type {Map<string, { items: any[], loading: boolean, error: string|null, success: boolean }>} */
         this.data = new Map();
         /** @type {Set<function()>} */
         this.listeners = new Set();
@@ -237,7 +237,48 @@ class DolphinStore {
     /** @private */
     _getCollection(name) {
         if (!this.data.has(name)) {
-            this.data.set(name, []);
+            const collection = {
+                _rawItems: [],
+                items: [],
+                loading: true,
+                error: null,
+                success: false,
+                _filter: null,
+                _sort: null,
+
+                /**
+                 * फिल्टर सेट गर्ने (Local filtering)
+                 * @param {function(any): boolean} fn 
+                 */
+                where: (fn) => {
+                    collection._filter = fn;
+                    this._applyTransform(collection);
+                    return collection;
+                },
+
+                /**
+                 * सर्टिङ सेट गर्ने
+                 * @param {string} key 
+                 * @param {'asc'|'desc'} [direction] 
+                 */
+                orderBy: (key, direction = 'asc') => {
+                    collection._sort = { key, direction };
+                    this._applyTransform(collection);
+                    return collection;
+                },
+
+                /**
+                 * फिल्टर र सर्ट हटाउने
+                 */
+                clear: () => {
+                    collection._filter = null;
+                    collection._sort = null;
+                    this._applyTransform(collection);
+                    return collection;
+                }
+            };
+
+            this.data.set(name, collection);
             this._fetchAndSync(name);
         }
         return this.data.get(name);
@@ -245,11 +286,15 @@ class DolphinStore {
 
     /** @private */
     async _fetchAndSync(name) {
+        const state = this.data.get(name);
         try {
             // 1. Initial Fetch
             const res = await this.client.api.get(`/${name.toLowerCase()}`);
-            this.data.set(name, Array.isArray(res) ? res : (res.data || []));
-            this._notify();
+            state._rawItems = Array.isArray(res) ? res : (res.data || []);
+            state.loading = false;
+            state.success = true;
+            state.error = null;
+            this._applyTransform(state);
 
             // 2. Realtime Sync (if connected)
             if (!this.subscribed.has(name)) {
@@ -260,13 +305,45 @@ class DolphinStore {
                 this.subscribed.add(name);
             }
         } catch (e) {
+            state.loading = false;
+            state.success = false;
+            state.error = e.data?.error || e.message || 'Fetch failed';
+            this._notify();
             console.error(`[DolphinStore] Sync failed for ${name}:`, e);
         }
     }
 
     /** @private */
+    _applyTransform(state) {
+        let result = [...state._rawItems];
+
+        // 1. Filter
+        if (state._filter) {
+            result = result.filter(state._filter);
+        }
+
+        // 2. Sort
+        if (state._sort) {
+            const { key, direction } = state._sort;
+            result.sort((a, b) => {
+                const av = a[key];
+                const bv = b[key];
+                if (av === bv) return 0;
+                const compare = av > bv ? 1 : -1;
+                return direction === 'asc' ? compare : -compare;
+            });
+        }
+
+        state.items = result;
+        this._notify();
+    }
+
+    /** @private */
     _handleRemoteUpdate(collection, update) {
-        let items = this.data.get(collection) || [];
+        const state = this.data.get(collection);
+        if (!state) return;
+
+        let items = state._rawItems;
         const { type, data } = update; // type: 'create', 'update', 'delete'
 
         if (type === 'create') {
@@ -277,8 +354,8 @@ class DolphinStore {
             items = items.filter(item => (item.id !== data.id && item._id !== data._id));
         }
 
-        this.data.set(collection, items);
-        this._notify();
+        state._rawItems = items;
+        this._applyTransform(state);
     }
 
     /** Subscribe for React components (useSyncExternalStore) */
@@ -288,7 +365,7 @@ class DolphinStore {
     }
 
     getSnapshot(collection) {
-        return this.data.get(collection) || [];
+        return this.data.get(collection) || { items: [], loading: false, error: null, success: false };
     }
 
     _notify() {

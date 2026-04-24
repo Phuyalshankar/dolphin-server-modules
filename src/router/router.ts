@@ -21,6 +21,7 @@ export function createDolphinRouter() {
         keys.push(key);
         return '([^\\/]+)';
       })
+      .replace(/\./g, '\\.')
       .replace(/\//g, '\\/');
     
     routes.push({

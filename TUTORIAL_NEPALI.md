@@ -130,11 +130,19 @@ const db = createMongooseAdapter({ User });
 ## ८. अथेन्टिकेसन (Auth Module)
 
 सुरक्षित API को लागि Dolphin भित्रै `auth` मोड्युल छ।
+यसको लागि सबैभन्दा पहिले प्रोजेक्टको रूटमा `.env` फाइल बनाउनुहोस्:
+
+```bash
+ENCRYPTION_KEY=तपाईँको_गोप्य_कि
+GEMINI_API_KEY=तपाईँको_जेमिनाई_कि
+```
 
 ```typescript
 import { createAuth } from 'dolphin-server-modules/auth';
 
-const auth = createAuth({ secret: 'MY_SECRET_KEY' });
+const auth = createAuth({ 
+  secret: process.env.ENCRYPTION_KEY 
+});
 
 // कुनै रूटलाई सुरक्षित बनाउन (v1.4.7: मिडलवेयर चेन सपोर्ट!)
 app.get('/profile', auth.requireAuth, async (ctx) => {

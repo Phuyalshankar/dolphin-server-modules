@@ -1,10 +1,11 @@
 {
   "name": "dolphin-server-modules",
-  "version": "2.2.3",
+  "version": "2.2.4",
   "homepage": "https://github.com/Phuyalshankar/dolphin-server-modules#readme",
   "description": "Core utility modules for Auth, CRUD, and Controllers",
   "main": "dist/index.js",
   "bin": {
+    "dolphin": "./dist/bin/cli.js",
     "dolphin-server": "./dist/bin/cli.js"
   },
   "types": "dist/index.d.ts",
@@ -14,27 +15,82 @@
     "LICENSE",
     "TUTORIAL_NEPALI.md",
     "DOLPHIN_MASTER_GUIDE_NEPALI.md",
-    "scripts/client.js"
+    "scripts/client.js",
+    "scripts/dolphin-persist.js"
   ],
   "exports": {
-    ".": "./dist/index.js",
-    "./auth": "./dist/auth/auth.js",
-    "./auth-controller": "./dist/authController/authController.js",
-    "./controller": "./dist/controller/controller.js",
-    "./crud": "./dist/curd/crud.js",
-    "./curd": "./dist/curd/crud.js",
-    "./middleware/zod": "./dist/middleware/zod.js",
-    "./adapters/mongoose": "./dist/adapters/mongoose/index.js",
-    "./server": "./dist/server/server.js",
-    "./router": "./dist/router/router.js",
-    "./realtime": "./dist/realtime/index.js",
-    "./realtime/core": "./dist/realtime/core.js",
-    "./realtime/trie": "./dist/realtime/trie.js",
-    "./realtime/codec": "./dist/realtime/codec.js",
-    "./realtime/plugins": "./dist/realtime/plugins.js",
-    "./swagger": "./dist/swagger/swagger.js",
-    "./djson": "./dist/djson/djson.js",
-    "./signaling": "./dist/signaling/index.js",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./auth": {
+      "types": "./dist/auth/auth.d.ts",
+      "default": "./dist/auth/auth.js"
+    },
+    "./auth-controller": {
+      "types": "./dist/authController/authController.d.ts",
+      "default": "./dist/authController/authController.js"
+    },
+    "./controller": {
+      "types": "./dist/controller/controller.d.ts",
+      "default": "./dist/controller/controller.js"
+    },
+    "./crud": {
+      "types": "./dist/curd/crud.d.ts",
+      "default": "./dist/curd/crud.js"
+    },
+    "./curd": {
+      "types": "./dist/curd/crud.d.ts",
+      "default": "./dist/curd/crud.js"
+    },
+    "./middleware/zod": {
+      "types": "./dist/middleware/zod.d.ts",
+      "default": "./dist/middleware/zod.js"
+    },
+    "./adapters/mongoose": {
+      "types": "./dist/adapters/mongoose/index.d.ts",
+      "default": "./dist/adapters/mongoose/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/server.d.ts",
+      "default": "./dist/server/server.js"
+    },
+    "./router": {
+      "types": "./dist/router/router.d.ts",
+      "default": "./dist/router/router.js"
+    },
+    "./realtime": {
+      "types": "./dist/realtime/index.d.ts",
+      "default": "./dist/realtime/index.js"
+    },
+    "./realtime/core": {
+      "types": "./dist/realtime/core.d.ts",
+      "default": "./dist/realtime/core.js"
+    },
+    "./realtime/trie": {
+      "types": "./dist/realtime/trie.d.ts",
+      "default": "./dist/realtime/trie.js"
+    },
+    "./realtime/codec": {
+      "types": "./dist/realtime/codec.d.ts",
+      "default": "./dist/realtime/codec.js"
+    },
+    "./realtime/plugins": {
+      "types": "./dist/realtime/plugins.d.ts",
+      "default": "./dist/realtime/plugins.js"
+    },
+    "./swagger": {
+      "types": "./dist/swagger/swagger.d.ts",
+      "default": "./dist/swagger/swagger.js"
+    },
+    "./djson": {
+      "types": "./dist/djson/djson.d.ts",
+      "default": "./dist/djson/djson.js"
+    },
+    "./signaling": {
+      "types": "./dist/signaling/index.d.ts",
+      "default": "./dist/signaling/index.js"
+    },
     "./cli": "./dist/bin/cli.js",
     "./client": "./scripts/client.js"
   },

@@ -1,13 +1,12 @@
-const mongoose = require('mongoose');
-const { createMongooseAdapter } = require('dolphin-server-modules/adapters/mongoose');
+import mongoose from 'mongoose';
+import { createMongooseAdapter } from 'dolphin-server-modules/adapters/mongoose';
 
-async function connectDB() {
-    await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/dolphin_db');
+export async function connectDB(models = {}) {
+    const uri = process.env.MONGO_URI || 'mongodb://localhost:27017/dolphin_db';
+    await mongoose.connect(uri);
     console.log('✅ MongoDB Connected');
     
     return createMongooseAdapter({
-        models: { /* Your Models Here */ }
+        models: { ...models }
     });
 }
-
-module.exports = connectDB;
