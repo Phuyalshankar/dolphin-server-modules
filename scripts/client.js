@@ -695,7 +695,9 @@ if (typeof window !== 'undefined') {
     window.dolphin = new DolphinClient();
 }
 
-// NodeJS/CommonJS Export support for IDE/Testing
+// NodeJS/CommonJS/ESM Export support
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { DolphinClient };
 }
+
+export { DolphinClient };

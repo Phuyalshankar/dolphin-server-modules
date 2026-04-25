@@ -1,31 +1,31 @@
-# Dolphin Framework Tutorial 🐬 (v2.2.5)
+# Dolphin Framework Tutorial 🐬 (v2.9.5)
 
-Welcome to the official tutorial for the **Dolphin Framework**. This guide will take you from zero to a production-ready API using native, high-performance modules.
+Welcome to the official tutorial for the **Dolphin Framework**. This guide will take you from zero to a production-ready API using native, high-performance modules and **Agentic AI**.
 
 ---
 
-## 1. Project Setup
+## 1. Project Setup with AI (Cursor Mode)
 
-Dolphin v2.2.5 makes it easier than ever to start a project using the CLI.
+Dolphin v2.9.5 introduces a Cursor-level AI Agent that helps you architect and write code directly from your terminal.
 
 ```bash
 # 1. Create directory
 mkdir my-dolphin-app && cd my-dolphin-app
 
-# 2. Initialize project (ESM by default)
-npx dolphin init
+# 2. Start the AI Agent (Cursor Mode)
+npx dolphin chat
 
-# 3. For a structured production setup:
-npx dolphin init-prod
+# 3. Architect a full production project via AI
+npx dolphin generate-full "e-commerce backend with orders and mongoose"
 ```
 
-This will automatically create `package.json` (with `"type": "module"`), `app.js`, and basic folders.
+The AI understands your entire project and can perform precision edits using the **Patch Tool**.
 
 ---
 
-## 2. Basic Server (Hello World)
+## 2. Basic Server (Modern ESM Only)
 
-Using modern ESM syntax:
+Dolphin strictly uses **ES Modules**. Do not use `require()` as it may lead to compatibility issues.
 
 ```javascript
 // app.js
@@ -34,7 +34,11 @@ import { createDolphinServer } from 'dolphin-server-modules/server';
 const app = createDolphinServer();
 
 app.get('/', (ctx) => {
-  return { message: "Welcome to the world of Dolphin! 🐬", version: "2.2.5" };
+  return { 
+    message: "Welcome to the world of Dolphin! 🐬", 
+    version: "2.9.5",
+    mode: "AI-Powered"
+  };
 });
 
 app.listen(3000, () => {
@@ -44,28 +48,50 @@ app.listen(3000, () => {
 
 ---
 
-## 3. Reactive Frontend Store [NEW v2.2.5]
+## 3. Multi-Model Support (Ollama & Groq)
 
-Dolphin now provides a powerful reactive store in the client library that manages your data and tracking states automatically.
+You can choose your AI provider in the `.env` file.
 
-### Usage
+```env
+# To use Local AI (Ollama)
+USE_OLLAMA=true
+OLLAMA_MODEL=gemma3:latest
+
+# To use Cloud AI (Groq)
+GROQ_API_KEY=your_key_here
+```
+
+---
+
+## 4. Scaffolding without AI
+
+If you prefer standard templates, use these built-in commands:
+
+```bash
+# Add Auth System (User Model + Controller)
+npx dolphin add auth
+
+# Add CRUD for a specific model
+npx dolphin add crud Product
+
+# Setup Mongoose connection
+npx dolphin add adapter mongoose
+```
+
+---
+
+## 5. Reactive Frontend Store
+
+Dolphin provides a powerful reactive store in the client library that manages your data and tracking states automatically.
+
 ```html
 <script src="/dolphin-client.js"></script>
 <script>
   async function init() {
-    // 1. Get collection
     const products = dolphin.store.products;
-
-    // 2. State Tracking (Reactive)
     if (products.loading) console.log("Fetching data...");
     
-    // 3. Filtering & Sorting
-    // Items are automatically re-sorted/filtered even on realtime updates
-    products
-        .where(p => p.price > 100)
-        .orderBy('price', 'desc');
-
-    // 4. Using data
+    // items are automatically synced with the server
     console.log(products.items);
   }
 </script>
@@ -73,69 +99,8 @@ Dolphin now provides a powerful reactive store in the client library that manage
 
 ---
 
-## 4. Offline Persistence [NEW v2.2.5]
+## 6. Conclusion
 
-Enable instant loading by caching your store data locally using the `DolphinPersist` plugin.
-
-```html
-<script src="/dolphin-client.js"></script>
-<script src="path/to/dolphin-persist.js"></script>
-
-<script>
-  // Setup persistence with IndexedDB
-  const persist = new DolphinPersist({ driver: 'indexeddb' });
-  enablePersist(dolphin.store, persist);
-  
-  // Data will now load from cache instantly before syncing with server
-</script>
-```
-
----
-
-## 5. Database Integration (Mongoose)
-
-Dolphin provides an automated bridge to Mongoose.
-
-```javascript
-import { createMongooseAdapter } from 'dolphin-server-modules/adapters/mongoose';
-import { createCRUD } from 'dolphin-server-modules/curd';
-
-// 1. Setup adapter
-const db = createMongooseAdapter({ User, Product });
-
-// 2. Create CRUD service
-const crud = createCRUD(db, { 
-    enforceOwnership: false,
-    realtime: true // Sync with DolphinStore automatically
-});
-
-// 3. Register routes
-app.get('/products', async (ctx) => ctx.json(await crud.read('Product')));
-```
-
----
-
-## 6. Realtime & IoT Integration
-
-```javascript
-import { RealtimeCore, JSONPlugin } from 'dolphin-server-modules/realtime';
-
-const rt = new RealtimeCore();
-rt.use(JSONPlugin);
-
-// Subscribe to topics
-rt.subscribe('sensors/temp', (ctx) => {
-  console.log(`Temperature:`, ctx.payload.value);
-});
-
-// Publish
-rt.publish('sensors/temp', { value: 24.5 });
-```
-
----
-
-## 7. Conclusion
-
-Dolphin Framework is built for speed, modularity, and ease of use. With the new v2.2.5 features, you have a complete full-stack synchronization engine for modern web apps.
+Dolphin Framework is built for speed, modularity, and AI-driven development. It is the perfect tool for building 2026-ready backends.
 
 Happy Coding! 🐬

@@ -1,43 +1,52 @@
-# Dolphin Framework: 0 to 100% Full Tutorial (Nepali) 🐬 [v2.2.5]
+# Dolphin Framework: 0 to 100% Full Tutorial (Nepali) 🐬 [v2.9.5]
 
-Dolphin Framework मा तपाईँलाई स्वागत छ! यो गाइडमा हामी Dolphin प्रयोग गरेर एउटा शक्तिशाली, छिटो र आधुनिक API कसरी बनाउने भनेर सुरुदेखि अन्त्यसम्म सिक्नेछौँ।
+Dolphin Framework मा तपाईँलाई स्वागत छ! यो गाइडमा हामी Dolphin प्रयोग गरेर एउटा शक्तिशाली, आधुनिक र एआई-संचालित (AI-Powered) ब्याकइन्ड कसरी बनाउने भनेर सिक्नेछौँ।
 
 ---
 
 ## १. Dolphin के हो? (Introduction)
 
-**Dolphin** एउटा "Zero-Dependency" ब्याकइन्ड फ्रेमवर्क हो। यो Node.js को नेटिभ `http` मोड्युलमा बनेको छ, जसले गर्दा यसको स्पिड एकदमै धेरै छ र यो २०२६ को आधुनिक आवश्यकताहरूका लागि तयार छ।
+**Dolphin** एउटा "Zero-Dependency" ब्याकइन्ड फ्रेमवर्क हो। यो २०२६ को आधुनिक आवश्यकताहरूका लागि तयार पारिएको छ। अहिले यसमा **Cursor-Level Agentic AI** थपिएको छ, जसले गर्दा तपाईँको कोडिङ अनुभव पूर्ण रूपमा बदलिनेछ।
 
 **मुख्य विशेषताहरू:**
+- **Advanced AI Agent**: प्रोजेक्ट बुझ्ने र आफैं कोड लेख्ने एजेन्ट।
 - **Ultra-Fast**: एक्सप्रेस (Express) भन्दा ५ गुणा सम्म छिटो।
-- **Reactive Sync**: फ्रन्टइन्ड र ब्याकइन्डको डेटा अटोमेटिक सिङ्क हुने।
-- **Offline Ready**: इन्टरनेट नहुँदा पनि डेटा सेभ गर्न मिल्ने (DolphinPersist)।
-- **Modern CLI**: एकै मिनेटमा प्रोजेक्ट तयार गर्न मिल्ने।
+- **Multi-Model Support**: Gemini, Groq (Llama 3), र Local Ollama सपोर्ट।
+- **ESM Ready**: आधुनिक `import/export` सिन्ट्याक्समा आधारित।
 
 ---
 
-## २. सुरुवाती सेटअप (Project Setup)
+## २. सुरुवाती सेटअप र एआई (Project Setup & AI)
 
-Dolphin v2.2.5 मा नयाँ CLI कमाण्डहरू थपिएका छन् जसले प्रोजेक्ट सुरु गर्न एकदमै सजिलो बनाउँछ:
+Dolphin v2.9.5 मा एआईको प्रयोग गरेर १ मिनेटमै प्रोजेक्ट तयार गर्न सकिन्छ:
 
 ```bash
 # १. नयाँ फोल्डर बनाउनुहोस्
 mkdir my-dolphin-app && cd my-dolphin-app
 
-# २. डल्फिन प्रोजेक्ट सुरु गर्नुहोस् (ESM support सहित)
-npx dolphin init
+# २. एआई एजेन्ट सुरु गर्नुहोस् (Cursor Mode)
+# यसले तपाईँको कुरा बुझ्छ र कोड लेख्न मद्दत गर्छ
+npx dolphin chat
 
-# ३. यदि तपाईंलाई 'Production' लेबलको फोल्डर स्ट्रक्चर चाहिन्छ भने:
-npx dolphin init-prod
+# ३. एआई मार्फत पूर्ण प्रोजेक्ट स्ट्रक्चर बनाउनुहोस्
+npx dolphin generate-full "e-commerce backend with orders and mongoose"
 ```
-
-यसले अटोमेटिकल्ली `package.json`, `app.js` र आवश्यक कन्फिगरेसन फाइलहरू बनाइदिन्छ।
 
 ---
 
-## ३. पहिलो सर्भर (Hello World)
+## ३. एआई एजेन्टसँग कुरा गर्ने (Chatting with Agent)
 
-अब `app.js` फाइलमा यो कोड राख्नुहोस् (हामी आधुनिक `import` सिन्ट्याक्स प्रयोग गर्छौं):
+Dolphin Agent ले अहिले **Roman Nepali** बुझ्छ। तपाईँले यसरी सोध्न सक्नुहुन्छ:
+
+> "Hey Dolphin, `real-test` फोल्डरमा एउटा नयाँ `order.js` मोडल बनाइदेऊ र `app.js` मा त्यसको रुट थपिदेऊ।"
+
+एजेन्टले तपाईँको प्रोजेक्टका सबै फाइलहरू हेर्छ र सिधै कोड अपडेट गरिदिन्छ। यसका लागि कुनै पनि `require` प्रयोग नगर्नुहोस्, सधैँ **`import`** प्रयोग गर्नुहोस्।
+
+---
+
+## ४. पहिलो सर्भर (Modern ESM Server)
+
+हामी आधुनिक `import` सिन्ट्याक्स मात्र प्रयोग गर्छौं, किनभने `require` ले पुराना समस्याहरू निम्त्याउन सक्छ।
 
 ```javascript
 import { createDolphinServer } from 'dolphin-server-modules/server';
@@ -46,34 +55,59 @@ const app = createDolphinServer();
 
 // एउटा सामान्य गेट (GET) रूट
 app.get('/', (ctx) => {
-  return { message: "Dolphin को संसारमा स्वागत छ! 🐬", version: "2.2.5" };
+  return { 
+    message: "Dolphin ko sansar ma swagat chha! 🐬", 
+    version: "2.9.5",
+    mode: "Agentic AI Ready"
+  };
 });
 
 // सर्भर सुन्न (Listen) सुरु गर्नुहोस्
 app.listen(3000, () => {
-  console.log("सर्भर http://localhost:3000 मा चलिरहेको छ!");
+  console.log("Server http://localhost:3000 ma chaliraheko chha!");
 });
 ```
 
 ---
 
-## ४. DolphinStore: शक्तिशाली र रिएक्टिभ स्टोर [NEW v2.2.5]
+## ५. एआई बिनाका शक्तिशाली कमाण्डहरू
 
-Dolphin को नयाँ स्टोरले फ्रन्टइन्डमा डेटा म्यानेजमेन्टलाई एकदमै सजिलो बनाउँछ। यसले डेटा लोड हुँदैछ कि छैन (loading), सफल भयो कि भएन (success) र एरर आयो कि (error) भनेर अटोमेटिक जानकारी दिन्छ।
+यदि तपाईँलाई एआई प्रयोग गर्न मन छैन भने, डल्फिनमा पहिले देखि नै बनेका टेम्पलेटहरू प्रयोग गर्न सक्नुहुन्छ:
 
-### क. स्टोर प्रयोग गर्ने तरिका
-```html
-<script src="/dolphin-client.js"></script>
-<script>
-  // १. स्टोरबाट कलेक्सन लिने
-  const products = dolphin.store.products;
+```bash
+# अथेन्टिकेसन सिस्टम थप्न
+npx dolphin add auth
 
-  // २. लोड स्टेट चेक गर्ने
-  if (products.loading) console.log("डेटा लोड हुँदैछ...");
-  
-  // ३. डेटा आएपछि देखाउने
-  if (products.success) {
-      console.log("डेटा आयो:", products.items);
+# कुनै मोडलको लागि CRUD थप्न
+npx dolphin add crud Product
+
+# मङ्गोस (Mongoose) सेटअप गर्न
+npx dolphin add adapter mongoose
+```
+
+---
+
+## ६. लोकल एआई (Ollama Support) [NEW]
+
+यदि तपाईँ आफ्नो डेटा क्लाउडमा पठाउन चाहनुहुन्न भने, आफ्नो कम्प्युटरमै **Ollama** चलाउन सक्नुहुन्छ। `.env` फाइलमा यो सेट गर्नुहोस्:
+
+```env
+USE_OLLAMA=true
+OLLAMA_MODEL=gemma3:latest
+```
+
+---
+
+## ७. अन्तिममा (Conclusion)
+
+Dolphin Framework अब एउटा सामान्य फ्रेमवर्क मात्र होइन, यो तपाईँको एउटा "एआई साथी" पनि हो। यसले तपाईँको कोडिङ स्पिड १० गुणा बढाउन मद्दत गर्छ।
+
+**थप जानकारीको लागि:**
+- [README.md](README.md) हेर्नुहोस्।
+- [Dolphin Master Guide](DOLPHIN_MASTER_GUIDE_NEPALI.md) पढ्नुहोस्।
+
+**Happy Coding in Nepali! 🇳🇵🐬**
+sole.log("डेटा आयो:", products.items);
   }
 </script>
 ```
