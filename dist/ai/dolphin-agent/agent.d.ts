@@ -1,0 +1,30 @@
+import { AIConfig } from './config.js';
+export declare class DolphinAgent {
+    private ai;
+    private config;
+    private currentDir;
+    private rl;
+    private projectIndex;
+    private symbolIndex;
+    private keywordIndex;
+    private historyFile;
+    private chatHistory;
+    constructor(config: AIConfig);
+    private calculateHash;
+    private walkDir;
+    private updateSemanticIndex;
+    private semanticSearch;
+    buildProjectMemory(): Promise<void>;
+    generateEnv(): Promise<void>;
+    private askPermission;
+    private isCommandSafe;
+    private isSensitiveFile;
+    private parseAIResponse;
+    private normalizeToolCall;
+    private buildContextPrompt;
+    private loadHistory;
+    private saveHistory;
+    private printHistory;
+    interactiveChat(): Promise<void>;
+    executeTask(prompt: string): Promise<void>;
+}

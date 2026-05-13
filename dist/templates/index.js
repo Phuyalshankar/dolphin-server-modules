@@ -1,5 +1,4 @@
 export const TEMPLATES = {
-
     app: `import { createDolphinServer } from 'dolphin-server-modules/server';
 import { createMongooseAdapter } from 'dolphin-server-modules/adapters/mongoose';
 import { createDolphinAuthController } from 'dolphin-server-modules/auth-controller';
@@ -39,7 +38,6 @@ app.get('/health', (ctx) => ({ status: 'ok', ts: new Date().toISOString() }));
 const PORT = parseInt(process.env.PORT || '3000');
 app.listen(PORT, () => console.log(\`🐬 Dolphin Server swimming on port \${PORT}\`));
 `,
-
     mongoose: `import mongoose from 'mongoose';
 
 export const connectDB = async (uri) => {
@@ -55,7 +53,6 @@ export const connectDB = async (uri) => {
 mongoose.connection.on('disconnected', () => console.warn('⚠️  MongoDB disconnected'));
 mongoose.connection.on('error', (err) => console.error('❌ MongoDB:', err.message));
 `,
-
     sequelize: `import { Sequelize } from 'sequelize';
 
 export const sequelize = new Sequelize(
@@ -80,7 +77,6 @@ export const connectDB = async () => {
   }
 };
 `,
-
     redis: `import { createClient } from 'redis';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
@@ -101,7 +97,6 @@ export const cache = {
   exists: async (key)  => (await redisClient.exists(key)) === 1,
 };
 `,
-
     auth: `import { createDolphinAuthController } from 'dolphin-server-modules/auth-controller';
 import { db } from './adapter.js'; // तपाईंको createMongooseAdapter instance
 
@@ -114,8 +109,7 @@ export const auth = createDolphinAuthController({
 
 export const { register, login, refresh, logout, middleware } = auth;
 `,
-
-    crud: (name: string) => `import { createCrudController } from 'dolphin-server-modules/crud';
+    crud: (name) => `import { createCrudController } from 'dolphin-server-modules/crud';
 import { db } from '../config/adapter.js';
 
 const ctrl = createCrudController(db, '${name}', {
@@ -126,8 +120,7 @@ const ctrl = createCrudController(db, '${name}', {
 export const { getAll, getOne, create, update } = ctrl;
 export const remove = ctrl.delete;
 `,
-
-    crudModel: (name: string) => `import mongoose from 'mongoose';
+    crudModel: (name) => `import mongoose from 'mongoose';
 
 const ${name.toLowerCase()}Schema = new mongoose.Schema(
   {
@@ -144,7 +137,6 @@ ${name.toLowerCase()}Schema.index({ createdAt: -1 });
 
 export const ${name} = mongoose.model('${name}', ${name.toLowerCase()}Schema);
 `,
-
     authModel: `import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema(
@@ -178,8 +170,7 @@ const refreshTokenSchema = new mongoose.Schema(
 refreshTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 export const RefreshToken = mongoose.model('RefreshToken', refreshTokenSchema);
 `,
-
-    model: (name: string) => `import mongoose from 'mongoose';
+    model: (name) => `import mongoose from 'mongoose';
 
 const ${name.toLowerCase()}Schema = new mongoose.Schema(
   {
@@ -201,8 +192,7 @@ ${name.toLowerCase()}Schema.index({ isActive: 1, createdAt: -1 });
 
 export const ${name} = mongoose.model('${name}', ${name.toLowerCase()}Schema);
 `,
-
-    middleware: (name: string) => `/**
+    middleware: (name) => `/**
  * ${name} Middleware
  * Usage: app.use(${name.toLowerCase()}Middleware)  वा  app.get('/route', ${name.toLowerCase()}Middleware, handler)
  */
@@ -212,8 +202,7 @@ export const ${name.toLowerCase()}Middleware = async (ctx, next) => {
   if (next) await next();
 };
 `,
-
-    route: (name: string) => `import { createDolphinRouter } from 'dolphin-server-modules/router';
+    route: (name) => `import { createDolphinRouter } from 'dolphin-server-modules/router';
 
 const router = createDolphinRouter();
 const base = '/${name.toLowerCase()}s';
@@ -240,8 +229,7 @@ router.delete(\`\${base}/:id\`, async (ctx) => {
 
 export const ${name.toLowerCase()}Router = router;
 `,
-
-    service: (name: string) => `/**
+    service: (name) => `/**
  * ${name}Service — Business logic layer
  * Controller र Database को बीचको layer
  */
@@ -273,7 +261,6 @@ export class ${name}Service {
   }
 }
 `,
-
     env: `# 🐬 Dolphin Framework — Environment Variables
 # ⚠️  यो file .gitignore मा राख्नुहोस् — production मा NEVER commit!
 
@@ -299,3 +286,4 @@ JWT_SECRET=change_this_ultra_secret_key_in_production_32chars
 # OLLAMA_MODEL=gemma3:latest
 `,
 };
+//# sourceMappingURL=index.js.map

@@ -93,7 +93,11 @@
       "default": "./dist/signaling/index.js"
     },
     "./cli": "./dist/bin/cli.js",
-    "./client": "./scripts/client.js"
+    "./client": "./scripts/client.js",
+    "./utils/ctx": {
+      "types": "./dist/utils/ctx.d.ts",
+      "default": "./dist/utils/ctx.js"
+    }
   },
   "scripts": {
     "build": "tsc",

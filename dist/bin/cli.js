@@ -7,30 +7,29 @@ import { fileURLToPath } from 'url';
 import { AIService } from '../services/ai-service.js';
 import { CLIUI } from '../utils/ui.js';
 import { TEMPLATES } from '../templates/index.js';
-
 const args = process.argv.slice(2);
 const command = args[0] || 'help';
-
 // Version — package.json बाट dynamic पढ्ने
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
-const VERSION: string = pkg.version;
-
+const VERSION = pkg.version;
 // .env loader
 const envFilePath = path.join(process.cwd(), '.env');
 if (fs.existsSync(envFilePath)) {
     fs.readFileSync(envFilePath, 'utf8').split('\n').forEach(line => {
         const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) return;
+        if (!trimmed || trimmed.startsWith('#'))
+            return;
         const eqIdx = trimmed.indexOf('=');
-        if (eqIdx === -1) return;
+        if (eqIdx === -1)
+            return;
         const key = trimmed.slice(0, eqIdx).trim();
         const value = trimmed.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '');
-        if (key && !process.env[key]) process.env[key] = value;
+        if (key && !process.env[key])
+            process.env[key] = value;
     });
 }
-
 const aiConfig = {
     apiKey: (process.env.DOLPHIN_AI_KEY || process.env.GEMINI_API_KEY || '').trim(),
     baseUrl: process.env.DOLPHIN_AI_BASE_URL,
@@ -38,47 +37,40 @@ const aiConfig = {
 };
 const useOllama = process.env.USE_OLLAMA === 'true';
 const hasAnyKey = aiConfig.apiKey || process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
-
 if (!hasAnyKey && !useOllama && ['generate', 'generate-full', 'chat'].includes(command)) {
     CLIUI.error('API Key फेला परेन! .env मा DOLPHIN_AI_KEY, GEMINI_API_KEY, वा GROQ_API_KEY राख्नुहोस्।');
     process.exit(1);
 }
-
 const ai = new AIService(aiConfig);
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function ensureDir(dir: string) {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+function ensureDir(dir) {
+    if (!fs.existsSync(dir))
+        fs.mkdirSync(dir, { recursive: true });
 }
-
-function writeFile(filePath: string, content: string, label?: string) {
+function writeFile(filePath, content, label) {
     ensureDir(path.dirname(filePath));
     fs.writeFileSync(filePath, content);
     console.log(`  📄 Created: ${label || path.relative(process.cwd(), filePath)}`);
 }
-
-function capitalize(s: string) {
+function capitalize(s) {
     return s.charAt(0).toUpperCase() + s.slice(1);
 }
-
 /** TCP port check — live connection test गर्ने */
-function checkTcpPort(host: string, port: number, timeoutMs = 4000): Promise<boolean> {
+function checkTcpPort(host, port, timeoutMs = 4000) {
     return new Promise((resolve) => {
         const socket = new net.Socket();
         socket.setTimeout(timeoutMs);
         socket.once('connect', () => { socket.destroy(); resolve(true); });
-        socket.once('error',   () => { socket.destroy(); resolve(false); });
+        socket.once('error', () => { socket.destroy(); resolve(false); });
         socket.once('timeout', () => { socket.destroy(); resolve(false); });
         socket.connect(port, host);
     });
 }
-
 /** URI बाट host र port निकाल्ने */
-function parseUri(uri: string): { host: string; port: number } {
+function parseUri(uri) {
     try {
         const u = new URL(uri);
-        const defaults: Record<string, number> = {
+        const defaults = {
             'mongodb:': 27017, 'mongodb+srv:': 27017,
             'redis:': 6379, 'rediss:': 6380,
         };
@@ -86,16 +78,14 @@ function parseUri(uri: string): { host: string; port: number } {
             host: u.hostname || 'localhost',
             port: parseInt(u.port || '') || defaults[u.protocol] || 3000,
         };
-    } catch {
+    }
+    catch {
         return { host: 'localhost', port: 27017 };
     }
 }
-
 // ─── Commands ─────────────────────────────────────────────────────────────────
-
 async function run() {
     switch (command) {
-
         // ── serve ────────────────────────────────────────────────────────────
         case 'serve': {
             const port = parseInt(args.find(a => a.startsWith('--port='))?.split('=')[1] || '3000');
@@ -110,23 +100,19 @@ async function run() {
             });
             break;
         }
-
         // ── connect mongoose|redis ───────────────────────────────────────────
         case 'connect': {
             const dbType = args[1];
-            const uriArg  = args[2];
-
+            const uriArg = args[2];
             if (dbType === 'mongoose' || dbType === 'mongo' || dbType === 'mongodb') {
                 const uri = uriArg || process.env.MONGO_URI || 'mongodb://localhost:27017';
                 CLIUI.heading('MongoDB Connection Test');
                 console.log(`  URI: ${uri.replace(/:\/\/[^@]+@/, '://***@')}`);
-
                 // Step 1: TCP check
                 CLIUI.startSpinner('TCP ping...');
                 const { host, port } = parseUri(uri);
                 const tcpOk = await checkTcpPort(host, port);
                 CLIUI.stopSpinner(tcpOk, tcpOk ? `Host reachable: ${host}:${port}` : `Cannot reach ${host}:${port}`);
-
                 if (!tcpOk) {
                     console.log('\n  \x1b[33mFix — MongoDB start गर्नुहोस्:\x1b[0m');
                     console.log('    brew services start mongodb-community  (macOS)');
@@ -134,7 +120,6 @@ async function run() {
                     console.log('    mongod                                  (manual)');
                     process.exit(1);
                 }
-
                 // Step 2: Mongoose check
                 CLIUI.startSpinner('Mongoose handshake...');
                 try {
@@ -144,22 +129,21 @@ async function run() {
                     await mongoose.default.disconnect();
                     CLIUI.stopSpinner(true, `Connected! Host: ${dbHost}`);
                     CLIUI.success('MongoDB तयार छ। MONGO_URI .env मा राख्नुहोस्।');
-                } catch (e: any) {
+                }
+                catch (e) {
                     CLIUI.stopSpinner(false, e.message);
                     CLIUI.error('Mongoose connection failed. URI सही छ?');
                     process.exit(1);
                 }
-
-            } else if (dbType === 'redis') {
+            }
+            else if (dbType === 'redis') {
                 const uri = uriArg || process.env.REDIS_URL || 'redis://localhost:6379';
                 CLIUI.heading('Redis Connection Test');
                 console.log(`  URI: ${uri}`);
-
                 CLIUI.startSpinner('TCP ping...');
                 const { host, port } = parseUri(uri);
                 const tcpOk = await checkTcpPort(host, port);
                 CLIUI.stopSpinner(tcpOk, tcpOk ? `Host reachable: ${host}:${port}` : `Cannot reach ${host}:${port}`);
-
                 if (!tcpOk) {
                     console.log('\n  \x1b[33mFix — Redis start गर्नुहोस्:\x1b[0m');
                     console.log('    brew services start redis    (macOS)');
@@ -167,48 +151,49 @@ async function run() {
                     console.log('    redis-server                 (manual)');
                     process.exit(1);
                 }
-
                 CLIUI.startSpinner('Redis PING...');
                 try {
-                    const { createClient } = await import('redis' as any);
-                    const client = (createClient as any)({ url: uri });
+                    const { createClient } = await import('redis');
+                    const client = createClient({ url: uri });
                     await client.connect();
                     const pong = await client.ping();
                     await client.quit();
                     CLIUI.stopSpinner(pong === 'PONG', `Redis replied: ${pong}`);
                     CLIUI.success('Redis तयार छ!');
-                } catch {
+                }
+                catch {
                     CLIUI.stopSpinner(true, 'TCP OK (redis package: npm install redis)');
                 }
-
-            } else {
+            }
+            else {
                 CLIUI.error('Usage:');
                 console.log('  dolphin connect mongoose [uri]');
                 console.log('  dolphin connect redis    [uri]');
             }
             break;
         }
-
         // ── generate ─────────────────────────────────────────────────────────
         case 'generate': {
             const prompt = args.slice(1).join(' ');
-            if (!prompt) return CLIUI.error('Usage: dolphin generate "your prompt"');
+            if (!prompt)
+                return CLIUI.error('Usage: dolphin generate "your prompt"');
             CLIUI.startSpinner('AI is generating code');
             try {
                 const response = await ai.request(prompt, 'Return ONLY raw JavaScript code. No markdown.');
                 const cleanCode = response.replace(/```javascript|```js|```/g, '').trim();
                 fs.writeFileSync(path.join(process.cwd(), 'ai-generated.js'), cleanCode);
                 CLIUI.stopSpinner(true, 'File generated: ai-generated.js');
-            } catch (e: any) {
+            }
+            catch (e) {
                 CLIUI.stopSpinner(false, e.message);
             }
             break;
         }
-
         // ── generate-full ────────────────────────────────────────────────────
         case 'generate-full': {
             const fullPrompt = args.slice(1).join(' ');
-            if (!fullPrompt) return CLIUI.error('Usage: dolphin generate-full "project description"');
+            if (!fullPrompt)
+                return CLIUI.error('Usage: dolphin generate-full "project description"');
             CLIUI.startSpinner('Architecting full project structure');
             try {
                 const sysPrompt = `You are a Dolphin Framework expert. Generate a production-ready backend project.
@@ -217,33 +202,36 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
                 const response = await ai.request(fullPrompt, sysPrompt);
                 const jsonMatch = response.match(/\{[\s\S]*\}/);
                 const cleaned = jsonMatch ? jsonMatch[0] : response.replace(/```json|```/g, '').trim();
-                let files: Record<string, string>;
+                let files;
                 try {
                     files = JSON.parse(cleaned);
-                } catch {
-                    const sanitized = cleaned.replace(/[\x00-\x1F\x7F-\x9F]/g, (c: string) =>
-                        c === '\n' ? '\\n' : c === '\r' ? '\\r' : c === '\t' ? '\\t' : ''
-                    );
+                }
+                catch {
+                    const sanitized = cleaned.replace(/[\x00-\x1F\x7F-\x9F]/g, (c) => c === '\n' ? '\\n' : c === '\r' ? '\\r' : c === '\t' ? '\\t' : '');
                     files = JSON.parse(sanitized);
                 }
                 Object.entries(files).forEach(([fPath, content]) => {
                     const fullPath = path.join(process.cwd(), fPath);
                     if (fPath === '.env' && fs.existsSync(fullPath)) {
-                        console.log('  ⚠️  Skipped: .env'); return;
+                        console.log('  ⚠️  Skipped: .env');
+                        return;
                     }
                     ensureDir(path.dirname(fullPath));
                     fs.writeFileSync(fullPath, content);
                     console.log(`  📄 Created: ${fPath}`);
                 });
                 const dotEnv = path.join(process.cwd(), '.env');
-                if (!fs.existsSync(dotEnv)) { fs.writeFileSync(dotEnv, TEMPLATES.env); console.log('  📄 Created: .env'); }
+                if (!fs.existsSync(dotEnv)) {
+                    fs.writeFileSync(dotEnv, TEMPLATES.env);
+                    console.log('  📄 Created: .env');
+                }
                 CLIUI.stopSpinner(true, 'Project architected!');
-            } catch (e: any) {
+            }
+            catch (e) {
                 CLIUI.stopSpinner(false, e.message);
             }
             break;
         }
-
         // ── chat ─────────────────────────────────────────────────────────────
         case 'chat': {
             import('../ai/dolphin-agent/index.js')
@@ -251,75 +239,71 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
                 .catch(err => CLIUI.error(`[Dolphin-Agent] ${err.message}`));
             break;
         }
-
         // ── init / init-prod ─────────────────────────────────────────────────
         case 'init':
         case 'init-prod': {
             CLIUI.heading('Production Project Scaffold');
             const dirs = ['models', 'controllers', 'routes', 'middleware', 'services', 'config'];
             dirs.forEach(d => { ensureDir(path.join(process.cwd(), d)); console.log(`  📁 ${d}/`); });
-
-            const files: [string, string][] = [
-                ['app.js',         TEMPLATES.app],
-                ['config/db.js',   TEMPLATES.mongoose],
-                ['.env',           TEMPLATES.env],
-                ['.gitignore',     'node_modules/\ndist/\n.env\n*.log\n'],
+            const files = [
+                ['app.js', TEMPLATES.app],
+                ['config/db.js', TEMPLATES.mongoose],
+                ['.env', TEMPLATES.env],
+                ['.gitignore', 'node_modules/\ndist/\n.env\n*.log\n'],
             ];
             files.forEach(([rel, content]) => {
                 const full = path.join(process.cwd(), rel);
-                if (!fs.existsSync(full)) { fs.writeFileSync(full, content); console.log(`  📄 Created: ${rel}`); }
+                if (!fs.existsSync(full)) {
+                    fs.writeFileSync(full, content);
+                    console.log(`  📄 Created: ${rel}`);
+                }
             });
-
             CLIUI.success('Structure ready!');
             console.log('\n  Next steps:');
             console.log('  1. npm install dolphin-server-modules mongoose');
             console.log('  2. dolphin connect mongoose     — DB test');
             console.log('  3. node app.js                  — Server start');
-
             import('../ai/dolphin-agent/index.js')
                 .then(m => m.initAgentHook({ framework: 'dolphin', autoGenerateEnv: true }))
-                .catch(() => {});
+                .catch(() => { });
             break;
         }
-
         // ── add ──────────────────────────────────────────────────────────────
         case 'add': {
-            const sub  = args[1];
+            const sub = args[1];
             const name = args[2];
-
             // add adapter
             if (sub === 'adapter') {
                 const type = name || '';
                 const configDir = path.join(process.cwd(), 'config');
-
                 if (['mongoose', 'mongo', 'mongodb'].includes(type)) {
                     writeFile(path.join(configDir, 'db.js'), TEMPLATES.mongoose, 'config/db.js');
                     CLIUI.success('Mongoose adapter added!');
                     console.log('\n  Usage: import { connectDB } from \'./config/db.js\';');
                     console.log('         connectDB(process.env.MONGO_URI);');
-
-                } else if (['sequelize', 'mysql', 'postgres', 'sql'].includes(type)) {
+                }
+                else if (['sequelize', 'mysql', 'postgres', 'sql'].includes(type)) {
                     writeFile(path.join(configDir, 'db.js'), TEMPLATES.sequelize, 'config/db.js');
                     CLIUI.success('Sequelize adapter added!');
                     console.log('\n  MySQL:      npm install sequelize mysql2');
                     console.log('  PostgreSQL: npm install sequelize pg pg-hstore');
-
-                } else if (type === 'redis') {
+                }
+                else if (type === 'redis') {
                     writeFile(path.join(configDir, 'redis.js'), TEMPLATES.redis, 'config/redis.js');
                     CLIUI.success('Redis adapter added!');
                     console.log('\n  Install: npm install redis');
                     console.log('  Usage:   import { connectRedis, cache } from \'./config/redis.js\';');
-
-                } else {
+                }
+                else {
                     CLIUI.error('Unknown adapter. Available: mongoose | sequelize | redis');
                     console.log('  Examples:');
                     console.log('    dolphin add adapter mongoose');
                     console.log('    dolphin add adapter sequelize');
                     console.log('    dolphin add adapter redis');
                 }
-
-            // add auth
-            } else if (sub === 'auth') {
+                // add auth
+            }
+            else if (sub === 'auth') {
                 writeFile(path.join(process.cwd(), 'controllers', 'auth.js'), TEMPLATES.auth, 'controllers/auth.js');
                 writeFile(path.join(process.cwd(), 'models', 'User.js'), TEMPLATES.authModel, 'models/User.js');
                 CLIUI.success('Auth controller + User model added!');
@@ -327,47 +311,52 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
                 console.log('  import { auth } from \'./controllers/auth.js\';');
                 console.log('  app.post(\'/api/auth/register\', auth.register);');
                 console.log('  app.post(\'/api/auth/login\', auth.login);');
-
-            // add crud
-            } else if (sub === 'crud') {
-                if (!name) return CLIUI.error('Usage: dolphin add crud <ModelName>');
+                // add crud
+            }
+            else if (sub === 'crud') {
+                if (!name)
+                    return CLIUI.error('Usage: dolphin add crud <ModelName>');
                 const N = capitalize(name);
-                writeFile(path.join(process.cwd(), 'controllers', `${N.toLowerCase()}.js`), (TEMPLATES.crud as any)(N), `controllers/${N.toLowerCase()}.js`);
-                writeFile(path.join(process.cwd(), 'models', `${N}.js`), (TEMPLATES.crudModel as any)(N), `models/${N}.js`);
+                writeFile(path.join(process.cwd(), 'controllers', `${N.toLowerCase()}.js`), TEMPLATES.crud(N), `controllers/${N.toLowerCase()}.js`);
+                writeFile(path.join(process.cwd(), 'models', `${N}.js`), TEMPLATES.crudModel(N), `models/${N}.js`);
                 CLIUI.success(`CRUD for ${N} generated!`);
-
-            // add model
-            } else if (sub === 'model') {
-                if (!name) return CLIUI.error('Usage: dolphin add model <ModelName>');
+                // add model
+            }
+            else if (sub === 'model') {
+                if (!name)
+                    return CLIUI.error('Usage: dolphin add model <ModelName>');
                 const N = capitalize(name);
-                writeFile(path.join(process.cwd(), 'models', `${N}.js`), (TEMPLATES.model as any)(N), `models/${N}.js`);
+                writeFile(path.join(process.cwd(), 'models', `${N}.js`), TEMPLATES.model(N), `models/${N}.js`);
                 CLIUI.success(`${N} model added!`);
-
-            // add middleware
-            } else if (sub === 'middleware' || sub === 'mw') {
-                if (!name) return CLIUI.error('Usage: dolphin add middleware <Name>');
+                // add middleware
+            }
+            else if (sub === 'middleware' || sub === 'mw') {
+                if (!name)
+                    return CLIUI.error('Usage: dolphin add middleware <Name>');
                 const N = capitalize(name);
-                writeFile(path.join(process.cwd(), 'middleware', `${name.toLowerCase()}.js`), (TEMPLATES.middleware as any)(N), `middleware/${name.toLowerCase()}.js`);
+                writeFile(path.join(process.cwd(), 'middleware', `${name.toLowerCase()}.js`), TEMPLATES.middleware(N), `middleware/${name.toLowerCase()}.js`);
                 CLIUI.success(`${N} middleware added!`);
                 console.log(`\n  app.use() मा थप्नुहोस्: import { ${name.toLowerCase()}Middleware } from './middleware/${name.toLowerCase()}.js';`);
-
-            // add route
-            } else if (sub === 'route' || sub === 'router') {
-                if (!name) return CLIUI.error('Usage: dolphin add route <Name>');
+                // add route
+            }
+            else if (sub === 'route' || sub === 'router') {
+                if (!name)
+                    return CLIUI.error('Usage: dolphin add route <Name>');
                 const N = capitalize(name);
-                writeFile(path.join(process.cwd(), 'routes', `${name.toLowerCase()}.js`), (TEMPLATES.route as any)(N), `routes/${name.toLowerCase()}.js`);
+                writeFile(path.join(process.cwd(), 'routes', `${name.toLowerCase()}.js`), TEMPLATES.route(N), `routes/${name.toLowerCase()}.js`);
                 CLIUI.success(`${N} route added!`);
                 console.log(`\n  import { ${name.toLowerCase()}Router } from './routes/${name.toLowerCase()}.js';`);
                 console.log(`  app.use('', ${name.toLowerCase()}Router);`);
-
-            // add service
-            } else if (sub === 'service' || sub === 'svc') {
-                if (!name) return CLIUI.error('Usage: dolphin add service <Name>');
+                // add service
+            }
+            else if (sub === 'service' || sub === 'svc') {
+                if (!name)
+                    return CLIUI.error('Usage: dolphin add service <Name>');
                 const N = capitalize(name);
-                writeFile(path.join(process.cwd(), 'services', `${N}.service.js`), (TEMPLATES.service as any)(N), `services/${N}.service.js`);
+                writeFile(path.join(process.cwd(), 'services', `${N}.service.js`), TEMPLATES.service(N), `services/${N}.service.js`);
                 CLIUI.success(`${N}Service added!`);
-
-            } else {
+            }
+            else {
                 CLIUI.error('Usage: dolphin add <subcommand>');
                 console.log('\n  adapter <mongoose|sequelize|redis>   DB adapter');
                 console.log('  auth                                 Auth system');
@@ -379,59 +368,53 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
             }
             break;
         }
-
         // ── status ───────────────────────────────────────────────────────────
         case 'status': {
             CLIUI.heading('Dolphin Project Status');
             const cwd = process.cwd();
-
-            type CheckItem = { label: string; file?: string; alt?: string; dir?: string };
-            const checks: CheckItem[] = [
-                { label: 'package.json',    file: 'package.json' },
-                { label: '.env',            file: '.env' },
+            const checks = [
+                { label: 'package.json', file: 'package.json' },
+                { label: '.env', file: '.env' },
                 { label: 'app.js / app.ts', file: 'app.js', alt: 'app.ts' },
-                { label: 'config/db.js',    file: 'config/db.js', alt: 'config/db.ts' },
-                { label: 'models/',         dir: 'models' },
-                { label: 'controllers/',    dir: 'controllers' },
-                { label: 'routes/',         dir: 'routes' },
-                { label: 'middleware/',     dir: 'middleware' },
-                { label: 'services/',       dir: 'services' },
+                { label: 'config/db.js', file: 'config/db.js', alt: 'config/db.ts' },
+                { label: 'models/', dir: 'models' },
+                { label: 'controllers/', dir: 'controllers' },
+                { label: 'routes/', dir: 'routes' },
+                { label: 'middleware/', dir: 'middleware' },
+                { label: 'services/', dir: 'services' },
             ];
-
             checks.forEach(({ label, file, alt, dir }) => {
                 let exists = false;
-                if (dir) exists = fs.existsSync(path.join(cwd, dir));
-                else exists = fs.existsSync(path.join(cwd, file!)) || (alt ? fs.existsSync(path.join(cwd, alt)) : false);
+                if (dir)
+                    exists = fs.existsSync(path.join(cwd, dir));
+                else
+                    exists = fs.existsSync(path.join(cwd, file)) || (alt ? fs.existsSync(path.join(cwd, alt)) : false);
                 const icon = exists ? '\x1b[32m✔\x1b[0m' : '\x1b[33m–\x1b[0m';
                 console.log(`  ${icon}  ${label}`);
             });
-
             const projPkg = path.join(cwd, 'package.json');
             if (fs.existsSync(projPkg)) {
                 const p = JSON.parse(fs.readFileSync(projPkg, 'utf8'));
                 const dsm = p.dependencies?.['dolphin-server-modules'] || p.devDependencies?.['dolphin-server-modules'];
                 console.log(`\n  dolphin-server-modules: ${dsm || '(package.json मा छैन)'}`);
             }
-
             const dotEnv = path.join(cwd, '.env');
             if (fs.existsSync(dotEnv)) {
                 const envText = fs.readFileSync(dotEnv, 'utf8');
                 console.log('\n  .env keys:');
-                ['MONGO_URI','JWT_SECRET','REDIS_URL','PORT'].forEach(k => {
+                ['MONGO_URI', 'JWT_SECRET', 'REDIS_URL', 'PORT'].forEach(k => {
                     const set = envText.includes(k + '=') && !envText.match(new RegExp(k + '=your_'));
                     console.log(`    ${set ? '\x1b[32m✔\x1b[0m' : '\x1b[33m–\x1b[0m'}  ${k}`);
                 });
             }
-
             console.log(`\n  🐬 Dolphin CLI v${VERSION}`);
             break;
         }
-
         // ── deploy ───────────────────────────────────────────────────────────
         case 'deploy': {
             CLIUI.heading('Production Deployment (PM2)');
             const entry = fs.existsSync(path.join(process.cwd(), 'dist/index.js')) ? 'dist/index.js'
-                        : fs.existsSync(path.join(process.cwd(), 'app.js')) ? 'app.js' : 'index.js';
+                : fs.existsSync(path.join(process.cwd(), 'app.js')) ? 'app.js' : 'index.js';
             console.log(`
   \x1b[1mStep 1\x1b[0m — PM2 install:
   \x1b[36mnpm install -g pm2\x1b[0m
@@ -459,14 +442,12 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
 `);
             break;
         }
-
         // ── version ──────────────────────────────────────────────────────────
         case '-v':
         case '--version':
         case 'version':
             console.log(`🐬 Dolphin CLI v${VERSION}`);
             break;
-
         // ── help ─────────────────────────────────────────────────────────────
         case 'help':
         default:
@@ -504,8 +485,8 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
 `);
     }
 }
-
 run().catch(err => {
     CLIUI.error(err.message);
     process.exit(1);
 });
+//# sourceMappingURL=cli.js.map
