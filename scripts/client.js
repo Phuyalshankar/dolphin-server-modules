@@ -1,7 +1,22 @@
 /**
+ * Dolphin Client v2.1 — Full-stack Realtime, API & Auth Client
+ * Zero-dependency, pure JS. Works in Browser + Node.js + React Native.
+ *
+ * Fixed in v2.1:
+ *  - pubFile()          — file upload (chunked)
+ *  - Request timeout    — AbortController with configurable timeout
+ *  - auth.refresh()     — auto access-token refresh
+ *  - auth.verify2FA()   — 2FA code verification
+ *  - Offline queue      — publish queue when WS is disconnected
+ *  - Improved JSDoc     — full TypeScript-compatible type hints
+ */
+
+// ─── JSDoc Types ─────────────────────────────────────────────────────────────
+
+/**
  * @typedef {Object} DolphinResponse
  * @property {boolean} success
- * @property {any} [data]
+ * @property {any}    [data]
  * @property {string} [message]
  * @property {number} [status]
  */
@@ -12,7 +27,7 @@
  * @property {string} type
  * @property {string} from
  * @property {string} to
- * @property {any} data
+ * @property {any}    data
  * @property {number} timestamp
  */
 
@@ -27,60 +42,66 @@
 
 /**
  * @callback TopicCallback
- * @param {any} payload
+ * @param {any}    payload
  * @param {string} [topic]
  */
 
 /**
- * Dolphin Client v2.0 - Full-stack Realtime, API & Auth Client
- * Zero-dependency, pure JS.
- * 
- * यो लाइब्रेरी डल्फिन सर्भरबाट सिधै उपलब्ध हुने पब-सब, API र Auth लाइब्रेरी हो।
+ * @typedef {Object} DolphinClientOptions
+ * @property {number} [timeout=15000]        — HTTP request timeout ms
+ * @property {number} [chunkSize=65536]      — file upload chunk size (bytes)
+ * @property {number} [maxReconnect=5]       — max WebSocket reconnect attempts
+ * @property {boolean} [autoRefreshToken=true] — auto-refresh expired access token
  */
 
+// ─── APIHandler ───────────────────────────────────────────────────────────────
+
 class APIHandler {
-    /**
-     * @param {DolphinClient} client
-     */
+    /** @param {DolphinClient} client */
     constructor(client) {
         this.client = client;
         return this._createProxy([]);
     }
 
-    /**
-     * @param {string[]} pathParts
-     * @private
-     */
+    /** @private */
     _createProxy(pathParts) {
-        const path = pathParts.join('/');
+        const joined = pathParts.join('/');
 
-        const target = (options) => {
-            return this.request('GET', path, null, options);
-        };
+        const target = (options) => this.request('GET', joined, null, options);
 
-        // Add standard methods to the function target
-        target.get = (pathOrOptions, options) => {
-            if (typeof pathOrOptions === 'string') return this.request('GET', pathOrOptions, null, options);
-            return this.request('GET', path, null, pathOrOptions);
-        };
-        target.post = (pathOrBody, bodyOrOptions, options) => {
-            if (typeof pathOrBody === 'string') return this.request('POST', pathOrBody, bodyOrOptions, options);
-            return this.request('POST', path, pathOrBody, bodyOrOptions);
-        };
-        target.put = (pathOrBody, bodyOrOptions, options) => {
-            if (typeof pathOrBody === 'string') return this.request('PUT', pathOrBody, bodyOrOptions, options);
-            return this.request('PUT', path, pathOrBody, bodyOrOptions);
-        };
-        target.del = (pathOrOptions, options) => {
-            if (typeof pathOrOptions === 'string') return this.request('DELETE', pathOrOptions, null, options);
-            return this.request('DELETE', path, null, pathOrOptions);
-        };
+        target.get  = (pathOrOptions, options) =>
+            typeof pathOrOptions === 'string'
+                ? this.request('GET', pathOrOptions, null, options)
+                : this.request('GET', joined, null, pathOrOptions);
+
+        target.post = (pathOrBody, bodyOrOptions, options) =>
+            typeof pathOrBody === 'string'
+                ? this.request('POST', pathOrBody, bodyOrOptions, options)
+                : this.request('POST', joined, pathOrBody, bodyOrOptions);
+
+        target.put  = (pathOrBody, bodyOrOptions, options) =>
+            typeof pathOrBody === 'string'
+                ? this.request('PUT', pathOrBody, bodyOrOptions, options)
+                : this.request('PUT', joined, pathOrBody, bodyOrOptions);
+
+        target.patch = (pathOrBody, bodyOrOptions, options) =>
+            typeof pathOrBody === 'string'
+                ? this.request('PATCH', pathOrBody, bodyOrOptions, options)
+                : this.request('PATCH', joined, pathOrBody, bodyOrOptions);
+
+        target.del  = (pathOrOptions, options) =>
+            typeof pathOrOptions === 'string'
+                ? this.request('DELETE', pathOrOptions, null, options)
+                : this.request('DELETE', joined, null, pathOrOptions);
+
         target.request = (method, subPath, body, options) => {
-            const finalPath = subPath ? `${path}/${subPath.startsWith('/') ? subPath.slice(1) : subPath}` : path;
+            const finalPath = subPath
+                ? `${joined}/${subPath.startsWith('/') ? subPath.slice(1) : subPath}`
+                : joined;
             return this.request(method, finalPath, body, options);
         };
 
-        const methods = ['get', 'post', 'put', 'del', 'request'];
+        const methods = ['get', 'post', 'put', 'patch', 'del', 'request'];
 
         return new Proxy(target, {
             get: (t, prop) => {
@@ -93,132 +114,210 @@ class APIHandler {
     }
 
     /**
-     * @param {string} method
-     * @param {string} path
-     * @param {any} [body]
+     * Make an HTTP request with timeout + auto token refresh.
+     * @param {string}      method
+     * @param {string}      path
+     * @param {any}         [body]
      * @param {RequestInit} [options]
+     * @param {boolean}     [_isRetry=false]   — internal: prevent infinite refresh loop
      * @returns {Promise<any>}
      */
-    async request(method, path, body = null, options = {}) {
+    async request(method, path, body = null, options = {}, _isRetry = false) {
         const url = `${this.client.httpUrl}${path.startsWith('/') ? path : '/' + path}`;
+
+        const controller = new AbortController();
+        const timeoutId  = setTimeout(
+            () => controller.abort(),
+            this.client.options.timeout
+        );
+
         const headers = {
             'Content-Type': 'application/json',
-            ...options.headers
+            ...(options.headers || {}),
         };
-
         if (this.client.accessToken) {
             headers['Authorization'] = `Bearer ${this.client.accessToken}`;
         }
 
-        const fetchOptions = {
-            method,
-            headers,
-            ...options
-        };
+        try {
+            const response = await fetch(url, {
+                method,
+                headers,
+                signal: controller.signal,
+                ...(body ? { body: JSON.stringify(body) } : {}),
+                ...options,
+            });
 
-        if (body) {
-            fetchOptions.body = JSON.stringify(body);
+            clearTimeout(timeoutId);
+
+            // Auto-refresh: 401 + not a retry + autoRefreshToken enabled
+            if (
+                response.status === 401 &&
+                !_isRetry &&
+                this.client.options.autoRefreshToken
+            ) {
+                const refreshed = await this.client.auth._silentRefresh();
+                if (refreshed) {
+                    return this.request(method, path, body, options, true);
+                }
+            }
+
+            const contentType = response.headers.get('content-type') || '';
+            const data = contentType.includes('application/json')
+                ? await response.json()
+                : await response.text();
+
+            if (!response.ok) throw { status: response.status, data };
+            return data;
+
+        } catch (err) {
+            clearTimeout(timeoutId);
+            if (err.name === 'AbortError') {
+                throw { status: 408, data: { error: 'Request timed out' } };
+            }
+            throw err;
         }
-
-        const response = await fetch(url, fetchOptions);
-        const contentType = response.headers.get('content-type');
-        let data;
-        if (contentType && contentType.includes('application/json')) {
-            data = await response.json();
-        } else {
-            data = await response.text();
-        }
-
-        if (!response.ok) {
-            throw { status: response.status, data };
-        }
-
-        return data;
     }
-
-    /**
-     * @param {string|RequestInit} [pathOrOptions]
-     * @param {RequestInit} [options]
-     * @returns {Promise<any>}
-     */
-    get(pathOrOptions, options) { return Promise.resolve(); }
-
-    /**
-     * @param {string|any} [pathOrBody]
-     * @param {any} [bodyOrOptions]
-     * @param {RequestInit} [options]
-     * @returns {Promise<any>}
-     */
-    post(pathOrBody, bodyOrOptions, options) { return Promise.resolve(); }
-
-    /**
-     * @param {string|any} [pathOrBody]
-     * @param {any} [bodyOrOptions]
-     * @param {RequestInit} [options]
-     * @returns {Promise<any>}
-     */
-    put(pathOrBody, bodyOrOptions, options) { return Promise.resolve(); }
-
-    /**
-     * @param {string|RequestInit} [pathOrOptions]
-     * @param {RequestInit} [options]
-     * @returns {Promise<any>}
-     */
-    del(pathOrOptions, options) { return Promise.resolve(); }
 }
 
+// ─── AuthHandler ──────────────────────────────────────────────────────────────
+
 class AuthHandler {
-    /**
-     * @param {DolphinClient} client
-     */
+    /** @param {DolphinClient} client */
     constructor(client) {
         this.client = client;
+        /** @type {any|null} */
         this.user = null;
+        this._refreshing = false;
     }
 
+    /**
+     * Login with email + password.
+     * @param {string} email
+     * @param {string} password
+     */
     async login(email, password) {
         const res = await this.client.api.post('/auth/login', { email, password });
         if (res.accessToken) {
             this.client.setToken(res.accessToken);
-            this.user = res.user;
+            this.user = res.user || null;
         }
         return res;
     }
 
+    /**
+     * Register a new account.
+     * @param {{ email: string, password: string, [key: string]: any }} data
+     */
     async register(data) {
-        return await this.client.api.post('/auth/register', data);
+        return this.client.api.post('/auth/register', data);
     }
 
+    /** Get current user profile. */
     async me() {
         const res = await this.client.api.get('/auth/me');
-        if (res.success) {
-            this.user = res.data;
-        }
+        if (res.success) this.user = res.data;
         return res;
     }
 
+    /** Logout and clear token. */
     async logout() {
-        await this.client.api.post('/auth/logout');
+        try { await this.client.api.post('/auth/logout'); } catch {}
         this.client.setToken(null);
         this.user = null;
     }
 
-    /** @param {string} email */
+    /**
+     * Manually refresh the access token using the httpOnly refresh-token cookie.
+     * Called automatically on 401 if autoRefreshToken is enabled.
+     * @returns {Promise<boolean>} — true if refresh succeeded
+     */
+    async refresh() {
+        return this._silentRefresh();
+    }
+
+    /** @private */
+    async _silentRefresh() {
+        if (this._refreshing) return false;
+        this._refreshing = true;
+        try {
+            const res = await this.client.api.post('/auth/refresh', null, {}, true);
+            if (res.accessToken) {
+                this.client.setToken(res.accessToken);
+                return true;
+            }
+            return false;
+        } catch {
+            this.client.setToken(null);
+            return false;
+        } finally {
+            this._refreshing = false;
+        }
+    }
+
+    /**
+     * Verify a 2FA TOTP code after login.
+     * @param {string} code     — 6-digit TOTP code
+     * @param {string} [email]  — email (if not already in user)
+     */
+    async verify2FA(code, email) {
+        const payload = {
+            code,
+            email: email || this.user?.email,
+        };
+        const res = await this.client.api.post('/auth/2fa/verify', payload);
+        if (res.accessToken) {
+            this.client.setToken(res.accessToken);
+            if (res.user) this.user = res.user;
+        }
+        return res;
+    }
+
+    /**
+     * Enable 2FA — returns QR code URL and secret.
+     */
+    async enable2FA() {
+        return this.client.api.post('/auth/2fa/enable');
+    }
+
+    /**
+     * Disable 2FA.
+     * @param {string} code — current TOTP code to confirm
+     */
+    async disable2FA(code) {
+        return this.client.api.post('/auth/2fa/disable', { code });
+    }
+
+    /**
+     * Request a password reset email.
+     * @param {string} email
+     */
     async forgotPassword(email) {
-        return await this.client.api.post('/auth/forgot-password', { email });
+        return this.client.api.post('/auth/forgot-password', { email });
+    }
+
+    /**
+     * Reset password using the token from email.
+     * @param {string} token
+     * @param {string} newPassword
+     */
+    async resetPassword(token, newPassword) {
+        return this.client.api.post('/auth/reset-password', { token, newPassword });
     }
 }
 
+// ─── DolphinStore ─────────────────────────────────────────────────────────────
+
 /**
- * DolphinStore - Reactive State Sync (Zustand Alternative)
- * Automatically syncs database collections with local state.
+ * Reactive state sync — auto-fetches collections and keeps them live
+ * via WebSocket pub/sub. Works with React useSyncExternalStore.
  */
 class DolphinStore {
     /** @param {DolphinClient} client */
     constructor(client) {
-        this.client = client;
-        /** @type {Map<string, { items: any[], loading: boolean, error: string|null, success: boolean }>} */
-        this.data = new Map();
+        this.client  = client;
+        /** @type {Map<string, any>} */
+        this.data      = new Map();
         /** @type {Set<function()>} */
         this.listeners = new Set();
         /** @type {Set<string>} */
@@ -227,9 +326,7 @@ class DolphinStore {
         return new Proxy(this, {
             get: (target, prop) => {
                 if (prop in target) return target[prop];
-                if (typeof prop === 'string') {
-                    return this._getCollection(prop);
-                }
+                if (typeof prop === 'string') return this._getCollection(prop);
             }
         });
     }
@@ -239,43 +336,29 @@ class DolphinStore {
         if (!this.data.has(name)) {
             const collection = {
                 _rawItems: [],
-                items: [],
-                loading: true,
-                error: null,
-                success: false,
-                _filter: null,
-                _sort: null,
+                items:     [],
+                loading:   true,
+                error:     null,
+                success:   false,
+                _filter:   null,
+                _sort:     null,
 
-                /**
-                 * फिल्टर सेट गर्ने (Local filtering)
-                 * @param {function(any): boolean} fn 
-                 */
                 where: (fn) => {
                     collection._filter = fn;
                     this._applyTransform(collection);
                     return collection;
                 },
-
-                /**
-                 * सर्टिङ सेट गर्ने
-                 * @param {string} key 
-                 * @param {'asc'|'desc'} [direction] 
-                 */
                 orderBy: (key, direction = 'asc') => {
                     collection._sort = { key, direction };
                     this._applyTransform(collection);
                     return collection;
                 },
-
-                /**
-                 * फिल्टर र सर्ट हटाउने
-                 */
-                clear: () => {
+                reset: () => {
                     collection._filter = null;
-                    collection._sort = null;
+                    collection._sort   = null;
                     this._applyTransform(collection);
                     return collection;
-                }
+                },
             };
 
             this.data.set(name, collection);
@@ -288,18 +371,15 @@ class DolphinStore {
     async _fetchAndSync(name) {
         const state = this.data.get(name);
         try {
-            // 1. Initial Fetch
             const res = await this.client.api.get(`/${name.toLowerCase()}`);
             state._rawItems = Array.isArray(res) ? res : (res.data || []);
-            state.loading = false;
-            state.success = true;
-            state.error = null;
+            state.loading   = false;
+            state.success   = true;
+            state.error     = null;
             this._applyTransform(state);
 
-            // 2. Realtime Sync (if connected)
             if (!this.subscribed.has(name)) {
-                const topic = `db:sync/${name.toLowerCase()}`;
-                this.client.subscribe(topic, (update) => {
+                this.client.subscribe(`db:sync/${name.toLowerCase()}`, (update) => {
                     this._handleRemoteUpdate(name, update);
                 });
                 this.subscribed.add(name);
@@ -307,33 +387,22 @@ class DolphinStore {
         } catch (e) {
             state.loading = false;
             state.success = false;
-            state.error = e.data?.error || e.message || 'Fetch failed';
+            state.error   = e.data?.error || e.message || 'Fetch failed';
             this._notify();
-            console.error(`[DolphinStore] Sync failed for ${name}:`, e);
         }
     }
 
     /** @private */
     _applyTransform(state) {
         let result = [...state._rawItems];
-
-        // 1. Filter
-        if (state._filter) {
-            result = result.filter(state._filter);
-        }
-
-        // 2. Sort
+        if (state._filter) result = result.filter(state._filter);
         if (state._sort) {
             const { key, direction } = state._sort;
             result.sort((a, b) => {
-                const av = a[key];
-                const bv = b[key];
-                if (av === bv) return 0;
-                const compare = av > bv ? 1 : -1;
-                return direction === 'asc' ? compare : -compare;
+                if (a[key] === b[key]) return 0;
+                return (a[key] > b[key] ? 1 : -1) * (direction === 'asc' ? 1 : -1);
             });
         }
-
         state.items = result;
         this._notify();
     }
@@ -342,110 +411,113 @@ class DolphinStore {
     _handleRemoteUpdate(collection, update) {
         const state = this.data.get(collection);
         if (!state) return;
-
+        const { type, data } = update;
         let items = state._rawItems;
-        const { type, data } = update; // type: 'create', 'update', 'delete'
 
         if (type === 'create') {
             items = [...items, data];
         } else if (type === 'update') {
-            items = items.map(item => (item.id === data.id || item._id === data._id) ? { ...item, ...data } : item);
+            items = items.map(i => (i.id === data.id || i._id === data._id) ? { ...i, ...data } : i);
         } else if (type === 'delete') {
-            items = items.filter(item => (item.id !== data.id && item._id !== data._id));
+            items = items.filter(i => i.id !== data.id && i._id !== data._id);
         }
 
         state._rawItems = items;
         this._applyTransform(state);
     }
 
-    /** Subscribe for React components (useSyncExternalStore) */
+    /** Subscribe for React useSyncExternalStore */
     subscribe(listener) {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);
     }
 
+    /** @param {string} collection */
     getSnapshot(collection) {
         return this.data.get(collection) || { items: [], loading: false, error: null, success: false };
     }
 
+    /** @private */
     _notify() {
         this.listeners.forEach(l => l());
     }
 }
 
+// ─── DolphinClient ────────────────────────────────────────────────────────────
+
 class DolphinClient {
     /**
-     * @param {string} [url]
-     * @param {string} [deviceId]
+     * @param {string}              [url]
+     * @param {string}              [deviceId]
+     * @param {DolphinClientOptions} [options]
      */
-    constructor(url = '', deviceId = '') {
-        // Handle URL formatting
-        if (!url && typeof window !== 'undefined') {
-            url = window.location.host;
-        }
+    constructor(url = '', deviceId = '', options = {}) {
+        if (!url && typeof window !== 'undefined') url = window.location.host;
 
         let protocol = 'http:';
-        if (url && url.startsWith('https://')) {
-            protocol = 'https:';
-        } else if (url && url.startsWith('http://')) {
-            protocol = 'http:';
-        } else if (typeof window !== 'undefined') {
-            protocol = window.location.protocol;
-        }
+        if      (url.startsWith('https://')) protocol = 'https:';
+        else if (url.startsWith('http://'))  protocol = 'http:';
+        else if (typeof window !== 'undefined') protocol = window.location.protocol;
 
-        this.host = (url || 'localhost').replace(/\/$/, "").replace(/^https?:\/\//, "");
+        this.host    = (url || 'localhost').replace(/\/$/, '').replace(/^https?:\/\//, '');
         this.httpUrl = `${protocol}//${this.host}`;
-        this.deviceId = deviceId || 'web_' + Math.random().toString(36).substr(2, 5);
+        this.deviceId = deviceId || 'web_' + Math.random().toString(36).substr(2, 8);
 
-        /** @type {WebSocket | null} */
-        this.socket = null;
-
-        // Polyfill Storage if not browser
-        this.storage = typeof localStorage !== 'undefined' ? localStorage : {
-            getItem: (key) => null,
-            setItem: (key, val) => { },
-            removeItem: (key) => { }
+        /** @type {DolphinClientOptions} */
+        this.options = {
+            timeout:          15000,
+            chunkSize:        65536,   // 64 KB
+            maxReconnect:     5,
+            autoRefreshToken: true,
+            ...options,
         };
 
-        /** @type {string | null} */
+        /** @type {WebSocket|null} */
+        this.socket = null;
+
+        // Storage polyfill
+        this.storage = typeof localStorage !== 'undefined' ? localStorage : {
+            getItem:    () => null,
+            setItem:    () => {},
+            removeItem: () => {},
+        };
+
+        /** @type {string|null} */
         this.accessToken = this.storage.getItem('dolphin_token');
 
         // Sub-handlers
-        this.api = new APIHandler(this);
-        this.auth = new AuthHandler(this);
+        this.api   = new APIHandler(this);
+        this.auth  = new AuthHandler(this);
         this.store = new DolphinStore(this);
 
         /** @type {Map<string, Set<TopicCallback>>} */
-        this.handlers = new Map(); // topic -> Set of callbacks
+        this.handlers       = new Map();
         /** @type {Set<function(SignalMessage): void>} */
         this.signalHandlers = new Set();
         /** @type {Set<function(FileMetadata): void>} */
-        this.fileHandlers = new Set();
+        this.fileHandlers   = new Set();
+
+        /** @type {Array<string>} — offline message queue */
+        this._offlineQueue  = [];
 
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
     }
 
-    /**
-     * टोकन सेट गर्ने र सेभ गर्ने
-     */
+    /** Save or clear the access token */
     setToken(token) {
         this.accessToken = token;
-        if (token) {
-            this.storage.setItem('dolphin_token', token);
-        } else {
-            this.storage.removeItem('dolphin_token');
-        }
+        token
+            ? this.storage.setItem('dolphin_token', token)
+            : this.storage.removeItem('dolphin_token');
     }
 
-    /**
-     * रियल-टाइम सर्भरसँग कनेक्शन सुरु गर्ने
-     * @returns {Promise<void>}
-     */
+    // ── WebSocket ─────────────────────────────────────────────────────────────
+
+    /** Connect to the Dolphin realtime server */
     async connect() {
         return new Promise((resolve, reject) => {
             const protocol = this.httpUrl.startsWith('https') ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${this.host}/realtime?deviceId=${this.deviceId}`;
+            const wsUrl    = `${protocol}//${this.host}/realtime?deviceId=${this.deviceId}`;
 
             console.log(`[Dolphin] Connecting to ${wsUrl}...`);
             this.socket = new WebSocket(wsUrl);
@@ -453,196 +525,271 @@ class DolphinClient {
             this.socket.onopen = () => {
                 console.log(`[Dolphin] Connected as "${this.deviceId}" 🐬`);
                 this.reconnectAttempts = 0;
+                this._flushOfflineQueue();
                 resolve();
             };
-
-            this.socket.onmessage = (event) => {
-                this._handleMessage(event.data);
-            };
-
-            this.socket.onclose = () => {
-                console.warn("[Dolphin] Connection closed");
+            this.socket.onmessage = (ev) => this._handleMessage(ev.data);
+            this.socket.onclose   = () => {
+                console.warn('[Dolphin] Connection closed');
                 this._maybeReconnect();
             };
-
             this.socket.onerror = (err) => {
-                console.error("[Dolphin] WebSocket Error:", err);
+                console.error('[Dolphin] WebSocket error:', err);
                 reject(err);
             };
         });
     }
 
+    /** Disconnect cleanly */
+    disconnect() {
+        if (this.socket) {
+            this.socket.onclose = null; // prevent auto-reconnect
+            this.socket.close();
+            this.socket = null;
+        }
+    }
+
+    /** @private */
     _handleMessage(data) {
         try {
-            const parsed = JSON.parse(data);
+            const msg = JSON.parse(data);
 
-            // १. Signaling Messages
-            if (parsed.type && parsed.from && (parsed.to === this.deviceId || parsed.to === 'all')) {
-                // Auto-ACK for signaling messages
-                if (parsed.msgId && parsed.type !== 'ACK') {
-                    this._sendAck(parsed.from, parsed.msgId);
-                }
-                this.signalHandlers.forEach(handler => handler(parsed));
+            // Signaling
+            if (msg.type && msg.from && (msg.to === this.deviceId || msg.to === 'all')) {
+                if (msg.msgId && msg.type !== 'ACK') this._sendAck(msg.from, msg.msgId);
+                this.signalHandlers.forEach(h => h(msg));
             }
 
-            // २. File & Data Responses
-            if (parsed.type === 'FILE_AVAILABLE') {
-                this.fileHandlers.forEach(handler => handler(parsed));
+            // File events
+            if (msg.type === 'FILE_AVAILABLE') {
+                this.fileHandlers.forEach(h => h(msg));
             }
-            if (parsed.type === 'FILE_CHUNK') {
-                this.saveFileProgress(parsed.fileId, parsed.chunkIndex);
-                this.handlers.forEach((callbacks, pattern) => {
-                    if (pattern === 'file:chunk' || pattern === `file:chunk/${parsed.fileId}`) {
-                        callbacks.forEach(cb => cb(parsed));
+            if (msg.type === 'FILE_CHUNK') {
+                this.saveFileProgress(msg.fileId, msg.chunkIndex);
+                this._dispatch('file:chunk', msg);
+                this._dispatch(`file:chunk/${msg.fileId}`, msg);
+            }
+            if (msg.type === 'FILE_UPLOAD_ACK') {
+                this._dispatch(`file:upload:ack/${msg.fileId}`, msg);
+            }
+
+            // Pull response
+            if (msg.type === 'PULL_RESPONSE') {
+                this._dispatch('pull:response', msg.payload, msg.topic);
+                this._dispatch(`pull:response/${msg.topic}`, msg.payload, msg.topic);
+            }
+
+            // Pub/Sub
+            if (msg.topic && msg.payload !== undefined) {
+                this.handlers.forEach((cbs, pattern) => {
+                    if (this._matchTopic(pattern, msg.topic)) {
+                        cbs.forEach(cb => cb(msg.payload, msg.topic));
                     }
                 });
             }
-            if (parsed.type === 'PULL_RESPONSE') {
-                this.handlers.forEach((callbacks, pattern) => {
-                    if (pattern === 'pull:response' || pattern === `pull:response/${parsed.topic}`) {
-                        callbacks.forEach(cb => cb(parsed.payload, parsed.topic));
-                    }
-                });
-            }
-
-            // ३. Pub/Sub Messages
-            if (parsed.topic && parsed.payload !== undefined) {
-                const topic = parsed.topic;
-                this.handlers.forEach((callbacks, pattern) => {
-                    if (this._matchTopic(pattern, topic)) {
-                        callbacks.forEach(cb => cb(parsed.payload, topic));
-                    }
-                });
-            }
-        } catch (e) {
-            this.handlers.forEach((callbacks, pattern) => {
-                if (pattern === 'raw') callbacks.forEach(cb => cb(data));
-            });
+        } catch {
+            this._dispatch('raw', data);
         }
     }
 
-    /**
-     * @param {string} to
-     * @param {string} msgId
-     * @private
-     */
-    _sendAck(to, msgId) {
-        this.publish(`phone/signaling/${to}`, {
-            type: 'ACK',
-            from: this.deviceId,
-            to: to,
-            data: { ackId: msgId },
-            timestamp: Date.now()
-        });
+    /** @private */
+    _dispatch(pattern, payload, topic) {
+        const cbs = this.handlers.get(pattern);
+        if (cbs) cbs.forEach(cb => cb(payload, topic || pattern));
     }
 
+    /** @private */
+    _sendRaw(msg) {
+        const str = typeof msg === 'string' ? msg : JSON.stringify(msg);
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(str);
+        } else {
+            // Buffer for offline queue (max 100 messages)
+            if (this._offlineQueue.length < 100) this._offlineQueue.push(str);
+        }
+    }
+
+    /** Flush buffered messages after reconnect @private */
+    _flushOfflineQueue() {
+        while (this._offlineQueue.length > 0) {
+            const msg = this._offlineQueue.shift();
+            if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+                this.socket.send(msg);
+            }
+        }
+    }
+
+    /** @private */
+    _sendAck(to, msgId) {
+        this._sendRaw({ type: 'ACK', from: this.deviceId, to, data: { ackId: msgId }, timestamp: Date.now() });
+    }
+
+    /** MQTT wildcard topic matching @private */
     _matchTopic(pattern, topic) {
         if (pattern === topic || pattern === '#') return true;
-        const pParts = pattern.split('/');
-        const tParts = topic.split('/');
-        if (pParts.length !== tParts.length && !pattern.includes('#')) return false;
-        for (let i = 0; i < pParts.length; i++) {
-            if (pParts[i] === '#') return true;
-            if (pParts[i] !== '+' && pParts[i] !== tParts[i]) return false;
+        const pp = pattern.split('/');
+        const tp = topic.split('/');
+        if (pp.length !== tp.length && !pattern.includes('#')) return false;
+        for (let i = 0; i < pp.length; i++) {
+            if (pp[i] === '#') return true;
+            if (pp[i] !== '+' && pp[i] !== tp[i]) return false;
         }
-        return pParts.length === tParts.length;
+        return pp.length === tp.length;
     }
 
+    /** @private */
+    _maybeReconnect() {
+        if (this.reconnectAttempts < this.options.maxReconnect) {
+            this.reconnectAttempts++;
+            const delay = Math.pow(2, this.reconnectAttempts) * 1000;
+            console.log(`[Dolphin] Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts})...`);
+            setTimeout(() => this.connect().catch(() => {}), delay);
+        } else {
+            console.error('[Dolphin] Max reconnect attempts reached.');
+        }
+    }
+
+    // ── Pub/Sub ───────────────────────────────────────────────────────────────
+
     /**
-     * @param {string} topic
+     * Subscribe to a topic (MQTT wildcards supported: + and #).
+     * @param {string}        topic
      * @param {TopicCallback} callback
      */
     subscribe(topic, callback) {
         if (!this.handlers.has(topic)) {
             this.handlers.set(topic, new Set());
-            // Tell server we want to sub
-            if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-                this.socket.send(JSON.stringify({ type: 'sub', topic }));
-            }
+            this._sendRaw({ type: 'sub', topic });
         }
         this.handlers.get(topic).add(callback);
     }
 
     /**
-     * @param {string} topic
+     * Unsubscribe from a topic.
+     * @param {string}        topic
      * @param {TopicCallback} callback
      */
     unsubscribe(topic, callback) {
         if (this.handlers.has(topic)) {
-            const callbacks = this.handlers.get(topic);
-            callbacks.delete(callback);
-            if (callbacks.size === 0) {
+            const cbs = this.handlers.get(topic);
+            cbs.delete(callback);
+            if (cbs.size === 0) {
                 this.handlers.delete(topic);
-                // Tell server we want to unsub
-                if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-                    this.socket.send(JSON.stringify({ type: 'unsub', topic }));
-                }
+                this._sendRaw({ type: 'unsub', topic });
             }
         }
     }
 
     /**
+     * Publish a message to a topic. Queued if offline.
      * @param {string} topic
-     * @param {any} payload
+     * @param {any}    payload
      */
     publish(topic, payload) {
-        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify({ topic, payload }));
-        }
+        this._sendRaw({ topic, payload });
     }
 
     /**
-     * High-frequency data push
+     * High-frequency data push (IoT sensors).
      * @param {string} topic
-     * @param {any} payload
+     * @param {any}    payload
      */
     pubPush(topic, payload) {
-        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify({ type: 'pub', topic, payload }));
-        }
+        this._sendRaw({ type: 'pub', topic, payload });
     }
 
     /**
-     * Request historical data from topic
+     * Request historical data from a topic.
      * @param {string} topic
-     * @param {number} [count]
+     * @param {number} [count=10]
      */
     subPull(topic, count = 10) {
-        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify({
-                type: 'PULL_REQUEST',
-                topic,
-                count
-            }));
+        this._sendRaw({ type: 'PULL_REQUEST', topic, count });
+    }
+
+    // ── File Transfer ─────────────────────────────────────────────────────────
+
+    /**
+     * Upload a file to the server in chunks.
+     * @param {string}   fileId
+     * @param {Blob|ArrayBuffer|Uint8Array} fileData
+     * @param {string}   [filename]
+     * @param {function(number): void} [onProgress]  — progress callback (0-100)
+     * @returns {Promise<void>}
+     */
+    async pubFile(fileId, fileData, filename = '', onProgress) {
+        let buffer;
+        if (fileData instanceof Blob) {
+            buffer = await fileData.arrayBuffer();
+        } else if (fileData instanceof ArrayBuffer) {
+            buffer = fileData;
+        } else {
+            buffer = fileData.buffer || fileData;
         }
+
+        const bytes      = new Uint8Array(buffer);
+        const chunkSize  = this.options.chunkSize;
+        const totalChunks = Math.ceil(bytes.length / chunkSize);
+
+        // Send file metadata first
+        this._sendRaw({
+            type:        'FILE_UPLOAD_START',
+            fileId,
+            name:        filename,
+            size:        bytes.length,
+            totalChunks,
+            chunkSize,
+        });
+
+        for (let i = 0; i < totalChunks; i++) {
+            const chunk    = bytes.slice(i * chunkSize, (i + 1) * chunkSize);
+            const b64      = this._uint8ToBase64(chunk);
+
+            this._sendRaw({
+                type:        'FILE_UPLOAD_CHUNK',
+                fileId,
+                chunkIndex:  i,
+                totalChunks,
+                data:        b64,
+            });
+
+            if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100));
+
+            // Small yield to prevent blocking
+            if (i % 10 === 0) await new Promise(r => setTimeout(r, 0));
+        }
+
+        this._sendRaw({ type: 'FILE_UPLOAD_DONE', fileId });
+    }
+
+    /** @private */
+    _uint8ToBase64(uint8) {
+        let binary = '';
+        for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
+        if (typeof btoa !== 'undefined') return btoa(binary);
+        return Buffer.from(binary, 'binary').toString('base64');
     }
 
     /**
-     * Start downloading a file by chunks
+     * Download a file from the server by chunks.
      * @param {string} fileId
-     * @param {number} [startChunk]
+     * @param {number} [startChunk=0]
      */
     subFile(fileId, startChunk = 0) {
-        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify({
-                type: 'FILE_REQUEST',
-                fileId,
-                startChunk
-            }));
-        }
+        this._sendRaw({ type: 'FILE_REQUEST', fileId, startChunk });
     }
 
     /**
-     * Resume a file download from last saved progress
+     * Resume a file download from saved progress.
      * @param {string} fileId
      */
     resumeFile(fileId) {
-        const lastChunk = parseInt(localStorage.getItem(`dolphin_file_${fileId}`) || "-1");
-        this.subFile(fileId, lastChunk + 1);
+        const last = parseInt(this.storage.getItem(`dolphin_file_${fileId}`) || '-1');
+        this.subFile(fileId, last + 1);
     }
 
     /**
-     * Save download progress
+     * Save download chunk progress.
      * @param {string} fileId
      * @param {number} chunkIndex
      */
@@ -650,52 +797,36 @@ class DolphinClient {
         this.storage.setItem(`dolphin_file_${fileId}`, chunkIndex.toString());
     }
 
-    /**
-     * @param {function(SignalMessage): void} handler
-     */
-    onSignal(handler) {
-        this.signalHandlers.add(handler);
-    }
+    // ── Signaling ─────────────────────────────────────────────────────────────
 
     /**
      * @param {function(SignalMessage): void} handler
      */
-    offSignal(handler) {
-        this.signalHandlers.delete(handler);
-    }
+    onSignal(handler)    { this.signalHandlers.add(handler); }
+
+    /**
+     * @param {function(SignalMessage): void} handler
+     */
+    offSignal(handler)   { this.signalHandlers.delete(handler); }
 
     /**
      * @param {function(FileMetadata): void} handler
      */
-    onFileAvailable(handler) {
-        this.fileHandlers.add(handler);
-    }
+    onFileAvailable(handler)  { this.fileHandlers.add(handler); }
 
     /**
      * @param {function(FileMetadata): void} handler
      */
-    offFileAvailable(handler) {
-        this.fileHandlers.delete(handler);
-    }
-
-    _maybeReconnect() {
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.reconnectAttempts++;
-            const delay = Math.pow(2, this.reconnectAttempts) * 1000;
-            setTimeout(() => this.connect(), delay);
-        }
-    }
+    offFileAvailable(handler) { this.fileHandlers.delete(handler); }
 }
 
-// Browser Global Export
+// ─── Exports ──────────────────────────────────────────────────────────────────
+
 if (typeof window !== 'undefined') {
-    // @ts-ignore
     window.DolphinClient = DolphinClient;
-    // @ts-ignore
-    window.dolphin = new DolphinClient();
+    window.dolphin       = new DolphinClient();
 }
 
-// NodeJS/CommonJS/ESM Export support
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { DolphinClient };
 }
