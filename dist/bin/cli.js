@@ -83,6 +83,88 @@ function parseUri(uri) {
         return { host: 'localhost', port: 27017 };
     }
 }
+/**
+ * Automatically registers the newly created Mongoose model in the entry file (e.g. app.js)
+ * where createMongooseAdapter is called, by adding the model import and inserting it into
+ * the adapter initialization parameters.
+ */
+function registerModelInAdapter(modelName) {
+    const entryFiles = ['app.js', 'app.ts', 'server.js', 'server.ts', 'index.js', 'index.ts'];
+    let foundFile = '';
+    let content = '';
+    for (const file of entryFiles) {
+        const fullPath = path.join(process.cwd(), file);
+        if (fs.existsSync(fullPath)) {
+            const txt = fs.readFileSync(fullPath, 'utf8');
+            if (txt.includes('createMongooseAdapter')) {
+                foundFile = fullPath;
+                content = txt;
+                break;
+            }
+        }
+    }
+    if (!foundFile) {
+        console.log(`  ⚠️  Could not find any file calling createMongooseAdapter to register ${modelName}.`);
+        return;
+    }
+    // 1. Add Import
+    if (content.includes(`models/${modelName}.js`) || content.includes(`models/${modelName}`)) {
+        console.log(`  ⚠️  ${modelName} is already imported in ${path.basename(foundFile)}`);
+    }
+    else {
+        const importLine = `import { ${modelName} } from './models/${modelName}.js';\n`;
+        const modelImportRegex = /import\s+{[^}]+}\s+from\s+['"].\/models\/[^'"]+['"];/g;
+        const matches = [...content.matchAll(modelImportRegex)];
+        if (matches.length > 0) {
+            const lastMatch = matches[matches.length - 1];
+            const insertPos = lastMatch.index + lastMatch[0].length;
+            content = content.slice(0, insertPos) + '\n' + importLine + content.slice(insertPos);
+        }
+        else {
+            const firstImportIdx = content.indexOf('import ');
+            if (firstImportIdx !== -1) {
+                content = content.slice(0, firstImportIdx) + importLine + content.slice(firstImportIdx);
+            }
+            else {
+                content = importLine + content;
+            }
+        }
+    }
+    // 2. Add to createMongooseAdapter arguments
+    const adapterCallRegex = /createMongooseAdapter\s*\(\s*\{([\s\S]*?)\}\s*\)/;
+    const match = content.match(adapterCallRegex);
+    if (match) {
+        const innerContent = match[1];
+        if (innerContent.includes(modelName)) {
+            console.log(`  ⚠️  ${modelName} already registered in createMongooseAdapter`);
+        }
+        else {
+            let updatedInner = '';
+            if (innerContent.includes('models:')) {
+                const modelsRegex = /models\s*:\s*\{\s*([\s\S]*?)\s*\}/;
+                const modelsMatch = innerContent.match(modelsRegex);
+                if (modelsMatch) {
+                    const existingModels = modelsMatch[1].trim();
+                    const updatedModels = existingModels ? `${modelName}, ${existingModels}` : modelName;
+                    updatedInner = innerContent.replace(modelsRegex, `models: { ${updatedModels} }`);
+                }
+                else {
+                    updatedInner = innerContent.trim() + `, models: { ${modelName} }`;
+                }
+            }
+            else {
+                const trimmedInner = innerContent.trim();
+                updatedInner = trimmedInner ? `${trimmedInner}, models: { ${modelName} }` : `models: { ${modelName} }`;
+            }
+            content = content.replace(adapterCallRegex, `createMongooseAdapter({ ${updatedInner} })`);
+            fs.writeFileSync(foundFile, content);
+            console.log(`  ✅ Registered: ${modelName} registered in ${path.relative(process.cwd(), foundFile)}`);
+        }
+    }
+    else {
+        console.log(`  ⚠️  Could not parse createMongooseAdapter call in ${path.basename(foundFile)}`);
+    }
+}
 // ─── Commands ─────────────────────────────────────────────────────────────────
 async function run() {
     switch (command) {
@@ -324,10 +406,22 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
             }
             else if (sub === 'model') {
                 if (!name)
-                    return CLIUI.error('Usage: dolphin add model <ModelName>');
+                    return CLIUI.error('Usage: dolphin add model <ModelName> [--adapter]');
                 const N = capitalize(name);
                 writeFile(path.join(process.cwd(), 'models', `${N}.js`), TEMPLATES.model(N), `models/${N}.js`);
                 CLIUI.success(`${N} model added!`);
+                if (args.includes('--adapter') || args.includes('-a')) {
+                    registerModelInAdapter(N);
+                }
+                // add model-adapter
+            }
+            else if (sub === 'model-adapter') {
+                if (!name)
+                    return CLIUI.error('Usage: dolphin add model-adapter <ModelName>');
+                const N = capitalize(name);
+                writeFile(path.join(process.cwd(), 'models', `${N}.js`), TEMPLATES.model(N), `models/${N}.js`);
+                CLIUI.success(`${N} model added!`);
+                registerModelInAdapter(N);
                 // add middleware
             }
             else if (sub === 'middleware' || sub === 'mw') {
@@ -361,7 +455,8 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
                 console.log('\n  adapter <mongoose|sequelize|redis>   DB adapter');
                 console.log('  auth                                 Auth system');
                 console.log('  crud <ModelName>                     CRUD controller + model');
-                console.log('  model <ModelName>                    Mongoose model');
+                console.log('  model <ModelName> [--adapter]         Mongoose model (optionally registers it)');
+                console.log('  model-adapter <ModelName>            Mongoose model & registers in adapter');
                 console.log('  middleware <Name>                    Middleware');
                 console.log('  route <Name>                         Route file');
                 console.log('  service <Name>                       Service class');
@@ -461,7 +556,8 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
   add adapter <type>           DB adapter  (mongoose|sequelize|redis)
   add auth                     Auth controller + User model
   add crud <ModelName>         CRUD controller + Model
-  add model <ModelName>        Mongoose model मात्र
+  add model <ModelName>        Mongoose model मात्र (use --adapter or model-adapter to register)
+  add model-adapter <ModelName> Mongoose model + registers in adapter
   add middleware <Name>        Middleware file
   add route <Name>             Route file
   add service <Name>           Service class

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { RealtimePlugin } from './plugins';
+import { RealtimePlugin } from './plugins.js';
 /**
  * File Metadata Interface
  */

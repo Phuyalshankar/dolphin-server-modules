@@ -1,5 +1,5 @@
 // test-2fa-real.ts
-import { createAuth } from "./auth/auth";
+import { createAuth } from "./auth/auth.js";
 import crypto from "node:crypto";
 import argon2 from "argon2";
 

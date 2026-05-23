@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { WebSocketServer } from 'ws';
-import { createDolphinRouter } from '../router/router';
+import { createDolphinRouter } from '../router/router.js';
 
 export function createDolphinServer(options: { port?: number; host?: string, realtime?: any } = {}) {
   const router = createDolphinRouter();

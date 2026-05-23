@@ -1,5 +1,7 @@
-export * from './core';
-export * from './codec';
-export * from './plugins';
-export * from './trie';
+export * from './core.js';
+export * from './codec.js';
+export * from './plugins.js';
+export * from './trie.js';
+export * from './camera.js';
+export * from './rtsp.js';
 //# sourceMappingURL=index.js.map

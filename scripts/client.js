@@ -419,7 +419,11 @@ class DolphinStore {
         } else if (type === 'update') {
             items = items.map(i => (i.id === data.id || i._id === data._id) ? { ...i, ...data } : i);
         } else if (type === 'delete') {
-            items = items.filter(i => i.id !== data.id && i._id !== data._id);
+            items = items.filter(i => {
+                if (data.id  != null && i.id  === data.id)  return false;
+                if (data._id != null && i._id === data._id) return false;
+                return true;
+            });
         }
 
         state._rawItems = items;

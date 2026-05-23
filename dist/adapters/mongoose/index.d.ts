@@ -18,14 +18,14 @@ export declare function createMongooseAdapter(config: MongooseAdapterConfig): {
     deleteRefreshToken(token: string): Promise<void>;
     create(collection: string, data: any, userId?: string): Promise<any>;
     readOne(collection: string, id: string, userId?: string): Promise<any>;
-    readMany(collection: string, query?: any, options?: any, userId?: string): Promise<any>;
+    readMany(collection: string, query?: any, options?: any, userId?: string): Promise<any[]>;
     updateOne(collection: string, id: string, data: any, userId?: string): Promise<any>;
     updateMany(collection: string, query: any, data: any, userId?: string): Promise<number>;
     deleteOne(collection: string, id: string, userId?: string): Promise<any>;
     deleteMany(collection: string, query: any, userId?: string): Promise<number>;
     restore(collection: string, id: string, userId?: string): Promise<any>;
     paginate(collection: string, filter?: any, page?: number, limit?: number, userId?: string): Promise<{
-        items: any;
+        items: any[];
         total: number;
         page: number;
         limit: number;
@@ -33,10 +33,10 @@ export declare function createMongooseAdapter(config: MongooseAdapterConfig): {
         hasNext: boolean;
         hasPrev: boolean;
     }>;
-    advancedRead(collection: string, query?: any, options?: any, userId?: string): Promise<any>;
+    advancedRead(collection: string, query?: any, options?: any, userId?: string): Promise<any[]>;
     count(collection: string, filter?: any, userId?: string): Promise<number>;
     exists(collection: string, filter?: any, userId?: string): Promise<boolean>;
-    read(collection: string, query?: any): Promise<any>;
+    read(collection: string, query?: any): Promise<any[]>;
     update(collection: string, query: any, data: any): Promise<any>;
     delete(collection: string, query: any): Promise<any>;
 };

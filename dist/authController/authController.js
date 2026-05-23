@@ -1,5 +1,5 @@
 // dolphin-server-modules/auth-controller.ts
-import { createAuth } from "../auth/auth";
+import { createAuth } from "../auth/auth.js";
 import crypto from 'node:crypto';
 // ✅ यो फङ्सनले ब्राउजरबाट आएको Raw Header बाट कुकी निकाल्छ
 const getCookie = (req, name) => {

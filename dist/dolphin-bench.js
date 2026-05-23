@@ -1,4 +1,4 @@
-import { createDolphinServer } from './server/server';
+import { createDolphinServer } from './server/server.js';
 import http from 'http';
 const PORT = 3007;
 const CONCURRENCY = 50;

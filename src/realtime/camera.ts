@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { RealtimeCore } from './core';
+import { RealtimeCore } from './core.js';
 
 /**
  * Supported camera frame codec types

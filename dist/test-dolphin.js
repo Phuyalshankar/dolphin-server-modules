@@ -1,7 +1,7 @@
 // test-dolphin.ts
-import { createDolphinServer } from "./server/server";
-import { createDolphinController } from "./controller/controller";
-import { createDolphinAuthController } from "./authController/authController";
+import { createDolphinServer } from "./server/server.js";
+import { createDolphinController } from "./controller/controller.js";
+import { createDolphinAuthController } from "./authController/authController.js";
 // Mock Database Connection (Replacing ./config.js)
 const dbConnect = async () => {
     console.log("🛠️ Mock Database Connected");

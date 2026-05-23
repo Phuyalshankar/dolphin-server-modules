@@ -1,4 +1,4 @@
-import { RealtimeCore } from '../realtime/core';
+import { RealtimeCore } from '../realtime/core.js';
 export declare enum SignalType {
     INVITE = "INVITE",
     ACCEPT = "ACCEPT",

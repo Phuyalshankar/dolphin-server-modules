@@ -18,7 +18,7 @@
 import { EventEmitter } from 'events';
 import { spawn, ChildProcess } from 'child_process';
 import * as net from 'net';
-import { CameraFrameModule } from './camera';
+import { CameraFrameModule } from './camera.js';
 
 // ─────────────────────────────────────────────────────────────
 // Types

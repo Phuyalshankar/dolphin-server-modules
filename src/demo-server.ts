@@ -1,9 +1,9 @@
 import mongoose, { Schema } from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { createDolphinServer } from './server/server';
-import { createCRUD } from './curd/crud';
-import { createMongooseAdapter } from './adapters/mongoose';
-import { RealtimeCore } from './realtime/core';
+import { createDolphinServer } from './server/server.js';
+import { createCRUD } from './curd/crud.js';
+import { createMongooseAdapter } from './adapters/mongoose/index.js';
+import { RealtimeCore } from './realtime/core.js';
 import path from 'path';
 
 // ===== Mongoose Models =====

@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { createDolphinServer } from './server/server';
-import { createMongooseAdapter } from './adapters/mongoose';
-import { createCrudController } from './curd/crud';
+import { createDolphinServer } from './server/server.js';
+import { createMongooseAdapter } from './adapters/mongoose/index.js';
+import { createCrudController } from './curd/crud.js';
 // Define a sample schema
 const ProductSchema = new mongoose.Schema({
     name: String,

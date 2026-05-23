@@ -153,7 +153,7 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
       if (limit) queryBuilder = queryBuilder.limit(limit);
       
       const docs = await queryBuilder;
-      return docs.map(mapDoc);
+      return (docs as any[]).map(mapDoc);
     },
 
     // Update one
@@ -255,7 +255,7 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
       ]);
       
       return {
-        items: items.map(mapDoc),
+        items: (items as any[]).map(mapDoc),
         total,
         page,
         limit: safeLimit,
@@ -280,7 +280,7 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
       if (limit) mQuery = mQuery.limit(limit);
       
       const docs = await mQuery.lean(leanByDefault);
-      return docs.map(mapDoc);
+      return (docs as any[]).map(mapDoc);
     },
 
     // Count
@@ -312,7 +312,7 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
       }
 
       const docs = await Model.find(filter).lean(leanByDefault);
-      return docs.map(mapDoc);
+      return (docs as any[]).map(mapDoc);
     },
     
     // Update method for CRUD controller

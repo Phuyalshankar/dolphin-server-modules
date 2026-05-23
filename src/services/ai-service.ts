@@ -161,17 +161,28 @@ export class AIService {
                             }
                         }
                     } else {
-                        // Gemini Stream handling (simplified)
-                        try {
-                            const json = JSON.parse(streamBuffer);
-                            const content = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                            if (content) {
-                                fullResponse += content;
-                                onChunk(content);
-                                streamBuffer = ''; // Clear after successful parse
+                        // Robust Gemini Stream handling for chunks
+                        let start = streamBuffer.indexOf('{');
+                        let end = streamBuffer.indexOf('}', start);
+                        
+                        while (start !== -1 && end !== -1) {
+                            // Attempt to find the full object (handling basic nesting)
+                            const potential = streamBuffer.substring(start, end + 1);
+                            try {
+                                const json = JSON.parse(potential);
+                                const content = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                                if (content) {
+                                    fullResponse += content;
+                                    onChunk(content);
+                                }
+                                streamBuffer = streamBuffer.substring(end + 1);
+                                start = streamBuffer.indexOf('{');
+                                end = streamBuffer.indexOf('}', start);
+                            } catch (e) {
+                                // Might be nested, search for next closing brace
+                                end = streamBuffer.indexOf('}', end + 1);
+                                if (end === -1) break;
                             }
-                        } catch (e) {
-                            // Wait for more data
                         }
                     }
                 });

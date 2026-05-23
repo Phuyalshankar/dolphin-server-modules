@@ -1,0 +1,8 @@
+```json
+{
+  "package.json": "{\"name\": \"dolphin-backend\", \"version\": \"1.0.0\", \"type\": \"module\", \"scripts\": {\"start\": \"node index.js\"}, \"dependencies\": {\"dolphin-server-modules\": \"^1.0.0\", \"mongoose\": \"^6.3.5\"}}",
+  "index.js": "import { createDolphinServer } from 'dolphin-server-modules/server';\nimport { createMongooseAdapter } from 'dolphin-server-modules/adapters/mongoose';\nimport { createDolphinAuthController } from 'dolphin-server-modules/auth-controller';\nimport { createCrudController } from 'dolphin-server-modules/crud';\nimport dotenv from 'dotenv';\ndotenv.config();\nconst app = createDolphinServer();\nconst db = createMongooseAdapter(process.env.DB_URI);\nconst authController = createDolphinAuthController(db);\nconst taskCrud = createCrudController(db, 'Task');\napp.get('/tasks', taskCrud.getAll);\napp.post('/tasks', taskCrud.create);\napp.post('/register', authController.register);\napp.post('/login', authController.login);\napp.listen(3000, () => console.log('Server listening on port 3000'));",
+  "models/Task.js": "import mongoose from 'mongoose';\nconst taskSchema = new mongoose.Schema({\n  title: String,\n  description: String\n});\nexport default mongoose.model('Task', taskSchema);",
+  ".env": "DB_URI=mongodb://localhost:27017/dolphin-backend"
+}
+```

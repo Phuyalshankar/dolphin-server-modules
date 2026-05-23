@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
-import { TopicTrie } from './trie';
-import { getSize } from './codec';
-import { djson, toBuffer } from '../djson/djson';
+import { TopicTrie } from './trie.js';
+import { getSize } from './codec.js';
+import { djson, toBuffer } from '../djson/djson.js';
 import * as fs from 'fs';
 /**
  * RealtimeCore v2.0 - High performance unified pub/sub bus for Dolphin
@@ -76,8 +76,8 @@ export class RealtimeCore extends EventEmitter {
     getCacheKey(obj) {
         if (typeof obj !== 'object')
             return String(obj);
-        const keys = Object.keys(obj).slice(0, 3);
-        return keys.map(k => `${k}:${String(obj[k]).substring(0, 50)}`).join('|');
+        // पूर्ण अबजेक्टलाई स्ट्रिङमा बदलेर की बनाउनु सुरक्षित हुन्छ
+        return JSON.stringify(obj);
     }
     setCache(key, value) {
         if (this.jsonCache.size >= this.MAX_CACHE_SIZE) {

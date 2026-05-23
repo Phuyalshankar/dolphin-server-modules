@@ -164,16 +164,45 @@ export class DolphinAgent {
 
     private parseAIResponse(response: string): any[] {
         const toolCalls: any[] = [];
-        const jsonBlocks = response.match(/\{[\s\S]*?\}/g) || [];
-        
-        for (const block of jsonBlocks) {
-            try {
-                const cleanBlock = block.replace(/```json|```/g, '').trim();
-                let parsed = JSON.parse(cleanBlock);
-                if (parsed.tool) toolCalls.push(this.normalizeToolCall(parsed));
-            } catch (e) {}
+
+        // Improved JSON extraction using brace counting to handle nested objects
+        let braceCount = 0;
+        let startIdx = -1;
+
+        for (let i = 0; i < response.length; i++) {
+            if (response[i] === '{') {
+                if (braceCount === 0) startIdx = i;
+                braceCount++;
+            } else if (response[i] === '}') {
+                braceCount--;
+                if (braceCount === 0 && startIdx !== -1) {
+                    const block = response.substring(startIdx, i + 1);
+                    try {
+                        // Remove markdown markers if present
+                        const cleanBlock = block.replace(/```json|```/g, '').trim();
+                        const parsed = JSON.parse(cleanBlock);
+                        if (parsed && parsed.tool) {
+                            toolCalls.push(this.normalizeToolCall(parsed));
+                        }
+                    } catch (e) {}
+                    startIdx = -1;
+                }
+            }
         }
-        return toolCalls.filter(t => t && t.tool);
+
+        // Fallback for markdown code blocks if the brace logic missed it
+        if (toolCalls.length === 0) {
+            const markdownBlocks = response.match(/```json\s*([\s\S]*?)\s*```/g) || [];
+            for (const b of markdownBlocks) {
+                try {
+                    const content = b.replace(/```json|```/g, '').trim();
+                    const parsed = JSON.parse(content);
+                    if (parsed && parsed.tool) toolCalls.push(this.normalizeToolCall(parsed));
+                } catch (e) {}
+            }
+        }
+
+        return toolCalls;
     }
 
     private normalizeToolCall(parsed: any) {
