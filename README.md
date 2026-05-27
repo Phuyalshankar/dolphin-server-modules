@@ -13,7 +13,7 @@
 ### 📘 Official Master Guide (Nepal)
 Dolphin Framework को विस्तृत र आधिकारिक गाइड उपलब्ध छ। यसमा **Auth, CRUD, Models, र Controllers** को १००% ट्युटोरियल समावेश छ।
 
-👉 **[Dolphin Master Guide (Web Version)](https://htmlpreview.github.io/?https://github.com/Phuyalshankar/dolphin-server-modules/blob/main/guide.html)** *(Most Up-to-Date)*
+👉 **[Dolphin Master Guide (Web Version)](https://raw.githack.com/Phuyalshankar/dolphin-server-modules/main/guide.html)** *(Most Up-to-Date)*
 
 ---
 
