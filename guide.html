@@ -125,6 +125,40 @@ li {
   page-break-before: always;
 }
 
+/* Images & Icons Styling */
+img {
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle;
+  border-style: none;
+  border-radius: 6px;
+}
+
+/* Inline badges, shields, and tiny icons should not stretch */
+img[src*="shields.io"],
+img[src*="badge"],
+img[src*="npm"],
+.badge,
+.icon,
+img.icon {
+  display: inline-block !important;
+  max-height: 24px;
+  width: auto !important;
+  vertical-align: middle;
+  border-radius: 0;
+  margin: 2px;
+}
+
+/* Emojis */
+.emoji,
+img.emoji {
+  display: inline-block !important;
+  height: 1.2em;
+  width: auto !important;
+  vertical-align: -0.2em;
+  margin: 0 0.2em;
+}
+
         body { padding: 45px; max-width: 900px; margin: 0 auto; box-sizing: border-box; }
         @media (max-width: 767px) { body { padding: 15px; } }
     </style>
