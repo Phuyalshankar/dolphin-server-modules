@@ -1,4 +1,4 @@
-# Dolphin Framework Tutorial 🐬 (v2.11.3)
+# Dolphin Framework Tutorial 🐬 (v2.11.4)
 
 Welcome to the official tutorial for the **Dolphin Framework**. This guide will take you from zero to a production-ready API using native, high-performance modules and **Agentic AI**.
 
@@ -6,7 +6,7 @@ Welcome to the official tutorial for the **Dolphin Framework**. This guide will 
 
 ## 1. Project Setup with AI (Cursor Mode)
 
-Dolphin v2.11.3 introduces a Cursor-level AI Agent that helps you architect and write code directly from your terminal.
+Dolphin v2.11.4 introduces a Cursor-level AI Agent that helps you architect and write code directly from your terminal.
 
 ```bash
 # 1. Create directory
@@ -36,7 +36,7 @@ const app = createDolphinServer();
 app.get('/', (ctx) => {
   return { 
     message: "Welcome to the world of Dolphin! 🐬", 
-    version: "2.11.3",
+    version: "2.11.4",
     mode: "AI-Powered"
   };
 });

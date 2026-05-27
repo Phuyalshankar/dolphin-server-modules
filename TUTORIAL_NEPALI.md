@@ -1,4 +1,4 @@
-# Dolphin Framework: 0 to 100% Full Tutorial (Nepali) 🐬 [v2.11.3]
+# Dolphin Framework: 0 to 100% Full Tutorial (Nepali) 🐬 [v2.11.4]
 
 Dolphin Framework मा तपाईँलाई स्वागत छ! यो गाइडमा हामी Dolphin प्रयोग गरेर एउटा शक्तिशाली, आधुनिक र एआई-संचालित (AI-Powered) ब्याकइन्ड कसरी बनाउने भनेर सिक्नेछौँ।
 
@@ -18,7 +18,7 @@ Dolphin Framework मा तपाईँलाई स्वागत छ! यो
 
 ## २. सुरुवाती सेटअप र एआई (Project Setup & AI)
 
-Dolphin v2.11.3 मा एआईको प्रयोग गरेर १ मिनेटमै प्रोजेक्ट तयार गर्न सकिन्छ:
+Dolphin v2.11.4 मा एआईको प्रयोग गरेर १ मिनेटमै प्रोजेक्ट तयार गर्न सकिन्छ:
 
 ```bash
 # १. नयाँ फोल्डर बनाउनुहोस्
@@ -57,7 +57,7 @@ const app = createDolphinServer();
 app.get('/', (ctx) => {
   return { 
     message: "Dolphin ko sansar ma swagat chha! 🐬", 
-    version: "2.11.3",
+    version: "2.11.4",
     mode: "Agentic AI Ready"
   };
 });
