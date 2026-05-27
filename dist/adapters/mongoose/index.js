@@ -54,6 +54,19 @@ export function createMongooseAdapter(config) {
             return RefreshToken;
         if (models[collection])
             return models[collection];
+        // Dynamic lookup via User/RefreshToken mongoose connection model registry
+        if (User && typeof User.db?.model === 'function') {
+            try {
+                return User.db.model(collection);
+            }
+            catch { }
+        }
+        if (RefreshToken && typeof RefreshToken.db?.model === 'function') {
+            try {
+                return RefreshToken.db.model(collection);
+            }
+            catch { }
+        }
         throw new Error(`Model '${collection}' not found`);
     };
     const adapter = {

@@ -278,11 +278,11 @@ describe('AuthHandler', () => {
     expect(c.auth.user).toBeNull();
   });
 
-  test('register — POST /auth/register', async () => {
+  test('register — POST /api/auth/register', async () => {
     (global as any).fetch = makeFetch(200, { success: true });
     await c.auth.register({ email: 'new@b.com', password: '123456' });
     const [url, opts] = (global as any).fetch.mock.calls[0];
-    expect(url).toContain('/auth/register');
+    expect(url).toContain('/api/auth/register');
     expect(opts.method).toBe('POST');
   });
 
@@ -300,18 +300,18 @@ describe('AuthHandler', () => {
     expect(c.auth.user).toEqual({ id: 3 });
   });
 
-  test('forgotPassword — POST /auth/forgot-password', async () => {
+  test('forgotPassword — POST /api/auth/forgot-password', async () => {
     (global as any).fetch = makeFetch(200, { success: true });
     await c.auth.forgotPassword('test@example.com');
     const [url] = (global as any).fetch.mock.calls[0];
-    expect(url).toContain('/auth/forgot-password');
+    expect(url).toContain('/api/auth/forgot-password');
   });
 
-  test('resetPassword — POST /auth/reset-password', async () => {
+  test('resetPassword — POST /api/auth/reset-password', async () => {
     (global as any).fetch = makeFetch(200, { success: true });
     await c.auth.resetPassword('reset-tok', 'newPass');
     const [url, opts] = (global as any).fetch.mock.calls[0];
-    expect(url).toContain('/auth/reset-password');
+    expect(url).toContain('/api/auth/reset-password');
     expect(JSON.parse(opts.body)).toEqual({ token: 'reset-tok', newPassword: 'newPass' });
   });
 });

@@ -1,6 +1,10 @@
 export declare const TEMPLATES: {
     app: string;
+    adaptersConnection: string;
+    adaptersDbDecoupled: string;
     mongoose: string;
+    mongooseConnect: string;
+    mongooseAdapter: string;
     sequelize: string;
     redis: string;
     auth: string;
@@ -12,4 +16,6 @@ export declare const TEMPLATES: {
     route: (name: string) => string;
     service: (name: string) => string;
     env: string;
+    simpleApp: string;
+    configAdapter: string;
 };

@@ -1,5 +1,5 @@
-// crud.ts — Complete Working Version (All Tests Pass)
 import crypto from 'node:crypto';
+import { createDolphinRouter } from '../router/router.js';
 // ===== HELPER: Fix ID for Mongoose =====
 const fixId = (query) => {
     if (!query)
@@ -286,5 +286,15 @@ export function createCrudController(adapter, collection, options) {
             ctx.json({ success: true, deleted: result });
         }
     };
+}
+export function createCrudRouter(adapter, collection, options) {
+    const router = createDolphinRouter();
+    const ctrl = createCrudController(adapter, collection, options);
+    router.get('/', ctrl.getAll);
+    router.get('/:id', ctrl.getOne);
+    router.post('/', ctrl.create);
+    router.put('/:id', ctrl.update);
+    router.delete('/:id', ctrl.delete);
+    return router;
 }
 //# sourceMappingURL=crud.js.map

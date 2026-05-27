@@ -1,5 +1,5 @@
 Dolphin Framework: Absolute Master Guide (100+ Pages Equivalent) 🐬🇳🇵
-Latest Version: v2.2.5 | Updated: 2026-04-24 | License: ISC
+Latest Version: v2.11.3 | Updated: 2026-05-27 | License: ISC
 
 यो डकुमेन्ट Dolphin Framework को आधिकारिक र विस्तृत गाइड हो। यसले तपाईँलाई एउटा साधारण कोड लेख्ने डेभलपरबाट "Framework Master" बनाउन मद्दत गर्नेछ।
 
@@ -52,9 +52,9 @@ Latest Version: v2.2.5 | Updated: 2026-04-24 | License: ISC
 
 १५. स्वतन्त्र अटो-स्वैगर जेनेरेसन
 
-१६. DolphinStore: रिएक्टिभ स्टेट म्यानेजमेन्ट र फिल्टरिङ (New v2.2.5)
+१६. DolphinStore: रिएक्टिभ स्टेट म्यानेजमेन्ट र फिल्टरिङ (New v2.11.3)
 
-१७. DolphinPersist: अफलाइन क्यासिङ र Persistence (New v2.2.5)
+१७. DolphinPersist: अफलाइन क्यासिङ र Persistence (New v2.11.3)
 
 १८. API रेफरेन्स
 
@@ -791,7 +791,7 @@ app.get('/docs', (ctx) => {
 app.get('/docs/json', (ctx) => ctx.json(apiDocs));
 rt.register(deviceId, socket?, metadata?)	डिभाइस रजिस्टर
 १६. DolphinStore: रिएक्टिभ स्टेट म्यानेजमेन्ट र फिल्टरिङ (Reactive State) 🐬
-Dolphin v2.2.5 मा थपिएको `DolphinStore` ले फ्रन्टइन्डमा डेटा म्यानेजमेन्टलाई अर्को स्तरमा पुर्‍याउँछ। यसले ब्याकइन्डको डेटालाई अटोमेटिक सिङ्क मात्र गर्दैन, तर फिल्टरिङ, सर्टिङ र लोड स्टेटहरू पनि म्यानेज गर्छ।
+Dolphin v2.11.3 मा थपिएको `DolphinStore` ले फ्रन्टइन्डमा डेटा म्यानेजमेन्टलाई अर्को स्तरमा पुर्‍याउँछ। यसले ब्याकइन्डको डेटालाई अटोमेटिक सिङ्क मात्र गर्दैन, तर फिल्टरिङ, सर्टिङ र लोड स्टेटहरू पनि म्यानेज गर्छ।
 
 १६.१ स्टेट ट्र्याकिङ (State Tracking)
 प्रत्येक कलेक्सनमा अब निम्न स्टेटहरू हुन्छन्:

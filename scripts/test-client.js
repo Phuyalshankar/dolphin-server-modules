@@ -58,7 +58,7 @@ async function runTests() {
     await dolphin.api.users.get();
     
     // Test post with body
-    await dolphin.api.post('/auth/login', { email: 'test@test.com' });
+    await dolphin.api.post('/api/auth/login', { email: 'test@test.com' });
     
     console.log('✅ API Proxy passed');
 

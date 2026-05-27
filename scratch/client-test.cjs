@@ -26,7 +26,7 @@ async function testClient() {
         console.log('✅ API POST Result:', postRes);
 
         console.log('3. Testing Auth login...');
-        // This will try to call /auth/login
+        // This will try to call /api/auth/login
         const loginRes = await client.auth.login('test@example.com', 'password123');
         console.log('✅ Auth Login Result:', loginRes);
 

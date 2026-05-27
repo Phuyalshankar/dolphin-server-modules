@@ -58,3 +58,21 @@ export declare function createCrudController<T extends BaseDocument = BaseDocume
     update: (ctx: any) => Promise<any>;
     delete: (ctx: any) => Promise<any>;
 };
+export declare function createCrudRouter<T extends BaseDocument = BaseDocument>(adapter: any, collection: string, options?: {
+    enforceOwnership?: boolean;
+    softDelete?: boolean;
+    defaultLimit?: number;
+}): {
+    get: (path: string, ...handlers: import("../index.js").Handler[]) => void;
+    post: (path: string, ...handlers: import("../index.js").Handler[]) => void;
+    put: (path: string, ...handlers: import("../index.js").Handler[]) => void;
+    delete: (path: string, ...handlers: import("../index.js").Handler[]) => void;
+    patch: (path: string, ...handlers: import("../index.js").Handler[]) => void;
+    all: (path: string, ...handlers: import("../index.js").Handler[]) => void;
+    use: (prefix: string, subRouter: any) => void;
+    _routes: import("../index.js").Route[];
+    match(method: string, url: string): {
+        handlers: import("../index.js").Handler[];
+        params: Record<string, string>;
+    } | null;
+};

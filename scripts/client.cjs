@@ -197,7 +197,7 @@ class AuthHandler {
      * @param {string} password
      */
     async login(email, password) {
-        const res = await this.client.api.post('/auth/login', { email, password });
+        const res = await this.client.api.post('/api/auth/login', { email, password });
         if (res.accessToken) {
             this.client.setToken(res.accessToken);
             this.user = res.user || null;
@@ -210,19 +210,19 @@ class AuthHandler {
      * @param {{ email: string, password: string, [key: string]: any }} data
      */
     async register(data) {
-        return this.client.api.post('/auth/register', data);
+        return this.client.api.post('/api/auth/register', data);
     }
 
     /** Get current user profile. */
     async me() {
-        const res = await this.client.api.get('/auth/me');
+        const res = await this.client.api.get('/api/auth/me');
         if (res.success) this.user = res.data;
         return res;
     }
 
     /** Logout and clear token. */
     async logout() {
-        try { await this.client.api.post('/auth/logout'); } catch {}
+        try { await this.client.api.post('/api/auth/logout'); } catch {}
         this.client.setToken(null);
         this.user = null;
     }
@@ -241,7 +241,7 @@ class AuthHandler {
         if (this._refreshing) return false;
         this._refreshing = true;
         try {
-            const res = await this.client.api.post('/auth/refresh', null, {}, true);
+            const res = await this.client.api.post('/api/auth/refresh', null, {}, true);
             if (res.accessToken) {
                 this.client.setToken(res.accessToken);
                 return true;
@@ -265,7 +265,7 @@ class AuthHandler {
             code,
             email: email || this.user?.email,
         };
-        const res = await this.client.api.post('/auth/2fa/verify', payload);
+        const res = await this.client.api.post('/api/auth/2fa/verify', payload);
         if (res.accessToken) {
             this.client.setToken(res.accessToken);
             if (res.user) this.user = res.user;
@@ -277,7 +277,7 @@ class AuthHandler {
      * Enable 2FA — returns QR code URL and secret.
      */
     async enable2FA() {
-        return this.client.api.post('/auth/2fa/enable');
+        return this.client.api.post('/api/auth/2fa/enable');
     }
 
     /**
@@ -285,7 +285,7 @@ class AuthHandler {
      * @param {string} code — current TOTP code to confirm
      */
     async disable2FA(code) {
-        return this.client.api.post('/auth/2fa/disable', { code });
+        return this.client.api.post('/api/auth/2fa/disable', { code });
     }
 
     /**
@@ -293,7 +293,7 @@ class AuthHandler {
      * @param {string} email
      */
     async forgotPassword(email) {
-        return this.client.api.post('/auth/forgot-password', { email });
+        return this.client.api.post('/api/auth/forgot-password', { email });
     }
 
     /**
@@ -302,7 +302,7 @@ class AuthHandler {
      * @param {string} newPassword
      */
     async resetPassword(token, newPassword) {
-        return this.client.api.post('/auth/reset-password', { token, newPassword });
+        return this.client.api.post('/api/auth/reset-password', { token, newPassword });
     }
 }
 

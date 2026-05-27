@@ -62,6 +62,126 @@ function capitalize(s: string) {
     return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/**
+ * app.js मा CRUD import र route line automatically inject गर्ने
+ */
+function injectIntoAppJs(N: string, plural: string): boolean {
+    const appPath = path.join(process.cwd(), 'app.js');
+    if (!fs.existsSync(appPath)) {
+        console.log('  ⚠️  app.js फेला परेन — manually थप्नुहोस्।');
+        return false;
+    }
+
+    let src = fs.readFileSync(appPath, 'utf8');
+    let changed = false;
+
+    // ── 1. createCrudRouter import (नभएको भए) ──────────────────────────────
+    if (!src.includes("'dolphin-server-modules/crud'")) {
+        // last import line को अन्त्यमा थप्ने
+        const lastImportIdx = src.lastIndexOf('\nimport ');
+        const insertPos = lastImportIdx !== -1
+            ? src.indexOf('\n', lastImportIdx + 1) + 1
+            : 0;
+        src = src.slice(0, insertPos)
+            + `import { createCrudRouter } from 'dolphin-server-modules/crud';\n`
+            + src.slice(insertPos);
+        changed = true;
+    }
+
+    // ── 2. Model import (नभएको भए) ──────────────────────────────────────────
+    if (!src.includes(`'./models/${N}.js'`) && !src.includes(`"./models/${N}.js"`)) {
+        const lastImportIdx2 = src.lastIndexOf('\nimport ');
+        const insertPos2 = lastImportIdx2 !== -1
+            ? src.indexOf('\n', lastImportIdx2 + 1) + 1
+            : 0;
+        src = src.slice(0, insertPos2)
+            + `import { ${N} } from './models/${N}.js';\n`
+            + src.slice(insertPos2);
+        changed = true;
+    }
+
+    // ── 3. app.use() — app.listen() भन्दा पहिले inject गर्ने ─────────────────
+    const routeLine = `app.use('/api/${plural}', createCrudRouter(db, '${N}', { softDelete: true }));`;
+    if (!src.includes(`'/api/${plural}'`) && !src.includes(`"/api/${plural}"`)) {
+        const listenIdx = src.indexOf('app.listen(');
+        if (listenIdx !== -1) {
+            src = src.slice(0, listenIdx) + routeLine + '\n\n' + src.slice(listenIdx);
+        } else {
+            src += '\n' + routeLine + '\n';
+        }
+        changed = true;
+    }
+
+    if (changed) {
+        fs.writeFileSync(appPath, src);
+        console.log('  ✏️  Updated: app.js');
+    } else {
+        console.log('  ⏭️  app.js — already up-to-date');
+    }
+    return true;
+}
+
+/**
+ * adapters/db.js (वा config/adapter.js) मा model import र registration inject गर्ने
+ */
+function injectIntoDbAdapter(N: string): boolean {
+    const candidates = [
+        path.join(process.cwd(), 'adapters', 'db.js'),
+        path.join(process.cwd(), 'config', 'adapter.js'),
+        path.join(process.cwd(), 'config', 'db.js'),
+    ];
+    const dbPath = candidates.find(p => fs.existsSync(p));
+    if (!dbPath) {
+        console.log('  ⚠️  adapters/db.js फेला परेन — manually थप्नुहोस्।');
+        return false;
+    }
+
+    let src = fs.readFileSync(dbPath, 'utf8');
+    const relPath = path.relative(process.cwd(), dbPath);
+    let changed = false;
+
+    // ── 1. Model import (नभएको भए) ──────────────────────────────────────────
+    const modelImport = `import { ${N} } from '../models/${N}.js';`;
+    if (!src.includes(`'../models/${N}.js'`) && !src.includes(`"../models/${N}.js"`)) {
+        const lastImportIdx = src.lastIndexOf('\nimport ');
+        const insertPos = lastImportIdx !== -1
+            ? src.indexOf('\n', lastImportIdx + 1) + 1
+            : 0;
+        src = src.slice(0, insertPos) + modelImport + '\n' + src.slice(insertPos);
+        changed = true;
+    }
+
+    // ── 2. models: { } object मा model थप्ने ────────────────────────────────
+    if (!src.includes(`${N}:`)) {
+        const modelsRegex = /models\s*:\s*\{([^}]*)\}/;
+        const match = modelsRegex.exec(src);
+        if (match) {
+            const inner = match[1];
+            const hasContent = inner.trim().length > 0;
+            const newInner = hasContent
+                ? inner.trimEnd() + `\n    ${N},\n  `
+                : `\n    ${N},\n  `;
+            src = src.replace(modelsRegex, `models: {${newInner}}`);
+            changed = true;
+        } else {
+            // models: block छैन — createMongooseAdapter({ ... }) को closing } भन्दा अघि थप्ने
+            src = src.replace(
+                /(createMongooseAdapter\([\s\S]*?)(\}\s*\)\s*;)/,
+                (_, body, close) => `${body}  ${N},\n${close}`
+            );
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        fs.writeFileSync(dbPath, src);
+        console.log(`  ✏️  Updated: ${relPath}`);
+    } else {
+        console.log(`  ⏭️  ${relPath} — already up-to-date`);
+    }
+    return true;
+}
+
 /** TCP port check — live connection test गर्ने */
 function checkTcpPort(host: string, port: number, timeoutMs = 4000): Promise<boolean> {
     return new Promise((resolve) => {
@@ -88,86 +208,6 @@ function parseUri(uri: string): { host: string; port: number } {
         };
     } catch {
         return { host: 'localhost', port: 27017 };
-    }
-}
-
-/**
- * Automatically registers the newly created Mongoose model in the entry file (e.g. app.js)
- * where createMongooseAdapter is called, by adding the model import and inserting it into
- * the adapter initialization parameters.
- */
-function registerModelInAdapter(modelName: string) {
-    const entryFiles = ['app.js', 'app.ts', 'server.js', 'server.ts', 'index.js', 'index.ts'];
-    let foundFile = '';
-    let content = '';
-    
-    for (const file of entryFiles) {
-        const fullPath = path.join(process.cwd(), file);
-        if (fs.existsSync(fullPath)) {
-            const txt = fs.readFileSync(fullPath, 'utf8');
-            if (txt.includes('createMongooseAdapter')) {
-                foundFile = fullPath;
-                content = txt;
-                break;
-            }
-        }
-    }
-    
-    if (!foundFile) {
-        console.log(`  ⚠️  Could not find any file calling createMongooseAdapter to register ${modelName}.`);
-        return;
-    }
-    
-    // 1. Add Import
-    if (content.includes(`models/${modelName}.js`) || content.includes(`models/${modelName}`)) {
-        console.log(`  ⚠️  ${modelName} is already imported in ${path.basename(foundFile)}`);
-    } else {
-        const importLine = `import { ${modelName} } from './models/${modelName}.js';\n`;
-        const modelImportRegex = /import\s+{[^}]+}\s+from\s+['"].\/models\/[^'"]+['"];/g;
-        const matches = [...content.matchAll(modelImportRegex)];
-        if (matches.length > 0) {
-            const lastMatch = matches[matches.length - 1];
-            const insertPos = lastMatch.index! + lastMatch[0].length;
-            content = content.slice(0, insertPos) + '\n' + importLine + content.slice(insertPos);
-        } else {
-            const firstImportIdx = content.indexOf('import ');
-            if (firstImportIdx !== -1) {
-                content = content.slice(0, firstImportIdx) + importLine + content.slice(firstImportIdx);
-            } else {
-                content = importLine + content;
-            }
-        }
-    }
-    
-    // 2. Add to createMongooseAdapter arguments
-    const adapterCallRegex = /createMongooseAdapter\s*\(\s*\{([\s\S]*?)\}\s*\)/;
-    const match = content.match(adapterCallRegex);
-    if (match) {
-        const innerContent = match[1];
-        if (innerContent.includes(modelName)) {
-            console.log(`  ⚠️  ${modelName} already registered in createMongooseAdapter`);
-        } else {
-            let updatedInner = '';
-            if (innerContent.includes('models:')) {
-                const modelsRegex = /models\s*:\s*\{\s*([\s\S]*?)\s*\}/;
-                const modelsMatch = innerContent.match(modelsRegex);
-                if (modelsMatch) {
-                    const existingModels = modelsMatch[1].trim();
-                    const updatedModels = existingModels ? `${modelName}, ${existingModels}` : modelName;
-                    updatedInner = innerContent.replace(modelsRegex, `models: { ${updatedModels} }`);
-                } else {
-                    updatedInner = innerContent.trim() + `, models: { ${modelName} }`;
-                }
-            } else {
-                const trimmedInner = innerContent.trim();
-                updatedInner = trimmedInner ? `${trimmedInner}, models: { ${modelName} }` : `models: { ${modelName} }`;
-            }
-            content = content.replace(adapterCallRegex, `createMongooseAdapter({ ${updatedInner} })`);
-            fs.writeFileSync(foundFile, content);
-            console.log(`  ✅ Registered: ${modelName} registered in ${path.relative(process.cwd(), foundFile)}`);
-        }
-    } else {
-        console.log(`  ⚠️  Could not parse createMongooseAdapter call in ${path.basename(foundFile)}`);
     }
 }
 
@@ -335,22 +375,24 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
         // ── init / init-prod ─────────────────────────────────────────────────
         case 'init':
         case 'init-prod': {
-            CLIUI.heading('Production Project Scaffold');
-            const dirs = ['models', 'controllers', 'routes', 'middleware', 'services', 'config'];
+            CLIUI.heading('Production Project Scaffold (Decoupled Mongoose Adapters)');
+            const dirs = ['models', 'adapters'];
             dirs.forEach(d => { ensureDir(path.join(process.cwd(), d)); console.log(`  📁 ${d}/`); });
 
             const files: [string, string][] = [
-                ['app.js',         TEMPLATES.app],
-                ['config/db.js',   TEMPLATES.mongoose],
-                ['.env',           TEMPLATES.env],
-                ['.gitignore',     'node_modules/\ndist/\n.env\n*.log\n'],
+                ['app.js',                 TEMPLATES.app],
+                ['adapters/connection.js', (TEMPLATES as any).adaptersConnection],
+                ['adapters/db.js',         (TEMPLATES as any).adaptersDbDecoupled],
+                ['models/User.js',         TEMPLATES.authModel],
+                ['.env',                   TEMPLATES.env],
+                ['.gitignore',             'node_modules/\ndist/\n.env\n*.log\n'],
             ];
             files.forEach(([rel, content]) => {
                 const full = path.join(process.cwd(), rel);
                 if (!fs.existsSync(full)) { fs.writeFileSync(full, content); console.log(`  📄 Created: ${rel}`); }
             });
 
-            CLIUI.success('Structure ready!');
+            CLIUI.success('Decoupled project structure ready!');
             console.log('\n  Next steps:');
             console.log('  1. npm install dolphin-server-modules mongoose');
             console.log('  2. dolphin connect mongoose     — DB test');
@@ -371,12 +413,14 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
             if (sub === 'adapter') {
                 const type = name || '';
                 const configDir = path.join(process.cwd(), 'config');
+                const adaptersDir = path.join(process.cwd(), 'adapters');
 
                 if (['mongoose', 'mongo', 'mongodb'].includes(type)) {
-                    writeFile(path.join(configDir, 'db.js'), TEMPLATES.mongoose, 'config/db.js');
+                    writeFile(path.join(adaptersDir, 'connection.js'), (TEMPLATES as any).adaptersConnection, 'adapters/connection.js');
+                    writeFile(path.join(adaptersDir, 'db.js'), (TEMPLATES as any).adaptersDbDecoupled, 'adapters/db.js');
                     CLIUI.success('Mongoose adapter added!');
-                    console.log('\n  Usage: import { connectDB } from \'./config/db.js\';');
-                    console.log('         connectDB(process.env.MONGO_URI);');
+                    console.log('\n  Usage: import { connectDB } from \'./adapters/connection.js\';');
+                    console.log('         import { db } from \'./adapters/db.js\';');
 
                 } else if (['sequelize', 'mysql', 'postgres', 'sql'].includes(type)) {
                     writeFile(path.join(configDir, 'db.js'), TEMPLATES.sequelize, 'config/db.js');
@@ -412,27 +456,32 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
             } else if (sub === 'crud') {
                 if (!name) return CLIUI.error('Usage: dolphin add crud <ModelName>');
                 const N = capitalize(name);
-                writeFile(path.join(process.cwd(), 'controllers', `${N.toLowerCase()}.js`), (TEMPLATES.crud as any)(N), `controllers/${N.toLowerCase()}.js`);
+                const plural = `${N.toLowerCase()}s`;
+
+                // ── 1. Model file बनाउने ──────────────────────────────────────
                 writeFile(path.join(process.cwd(), 'models', `${N}.js`), (TEMPLATES.crudModel as any)(N), `models/${N}.js`);
-                CLIUI.success(`CRUD for ${N} generated!`);
+
+                // ── 2. app.js मा automatically inject गर्ने ──────────────────
+                injectIntoAppJs(N, plural);
+
+                // ── 3. adapters/db.js मा model register गर्ने ────────────────
+                injectIntoDbAdapter(N);
+
+                CLIUI.success(`CRUD for ${N} ready!`);
+                console.log(`\n  🗺️  Routes:`);
+                console.log(`    GET    /api/${plural}       → getAll`);
+                console.log(`    GET    /api/${plural}/:id   → getOne`);
+                console.log(`    POST   /api/${plural}       → create`);
+                console.log(`    PUT    /api/${plural}/:id   → update`);
+                console.log(`    DELETE /api/${plural}/:id   → delete`);
+                console.log(`\n  ✅ app.js र adapters/db.js automatically update भयो!`);
 
             // add model
             } else if (sub === 'model') {
-                if (!name) return CLIUI.error('Usage: dolphin add model <ModelName> [--adapter]');
+                if (!name) return CLIUI.error('Usage: dolphin add model <ModelName>');
                 const N = capitalize(name);
                 writeFile(path.join(process.cwd(), 'models', `${N}.js`), (TEMPLATES.model as any)(N), `models/${N}.js`);
                 CLIUI.success(`${N} model added!`);
-                if (args.includes('--adapter') || args.includes('-a')) {
-                    registerModelInAdapter(N);
-                }
-
-            // add model-adapter
-            } else if (sub === 'model-adapter') {
-                if (!name) return CLIUI.error('Usage: dolphin add model-adapter <ModelName>');
-                const N = capitalize(name);
-                writeFile(path.join(process.cwd(), 'models', `${N}.js`), (TEMPLATES.model as any)(N), `models/${N}.js`);
-                CLIUI.success(`${N} model added!`);
-                registerModelInAdapter(N);
 
             // add middleware
             } else if (sub === 'middleware' || sub === 'mw') {
@@ -462,9 +511,8 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
                 CLIUI.error('Usage: dolphin add <subcommand>');
                 console.log('\n  adapter <mongoose|sequelize|redis>   DB adapter');
                 console.log('  auth                                 Auth system');
-                console.log('  crud <ModelName>                     CRUD controller + model');
-                console.log('  model <ModelName> [--adapter]         Mongoose model (optionally registers it)');
-                console.log('  model-adapter <ModelName>            Mongoose model & registers in adapter');
+                console.log('  crud <ModelName>                     CRUD router + model (single-line app.js)');
+                console.log('  model <ModelName>                    Mongoose model');
                 console.log('  middleware <Name>                    Middleware');
                 console.log('  route <Name>                         Route file');
                 console.log('  service <Name>                       Service class');
@@ -482,7 +530,8 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
                 { label: 'package.json',    file: 'package.json' },
                 { label: '.env',            file: '.env' },
                 { label: 'app.js / app.ts', file: 'app.js', alt: 'app.ts' },
-                { label: 'config/db.js',    file: 'config/db.js', alt: 'config/db.ts' },
+                { label: 'adapters/connection.js', file: 'adapters/connection.js', alt: 'adapters/connection.ts' },
+                { label: 'adapters/db.js',  file: 'adapters/db.js', alt: 'adapters/db.ts' },
                 { label: 'models/',         dir: 'models' },
                 { label: 'controllers/',    dir: 'controllers' },
                 { label: 'routes/',         dir: 'routes' },
@@ -571,9 +620,8 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
   init / init-prod             Production project scaffold
   add adapter <type>           DB adapter  (mongoose|sequelize|redis)
   add auth                     Auth controller + User model
-  add crud <ModelName>         CRUD controller + Model
-  add model <ModelName>        Mongoose model मात्र (use --adapter or model-adapter to register)
-  add model-adapter <ModelName> Mongoose model + registers in adapter
+  add crud <ModelName>         CRUD router + Model  (single-line in app.js)
+  add model <ModelName>        Mongoose model मात्र
   add middleware <Name>        Middleware file
   add route <Name>             Route file
   add service <Name>           Service class

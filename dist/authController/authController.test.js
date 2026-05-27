@@ -82,6 +82,7 @@ jest.mock('../authController/authController', () => ({
         disable2FA: jest.fn().mockImplementation(async () => {
             return { success: true };
         }),
+        middleware: jest.fn(() => (req, res, next) => next()),
         requireAuth: jest.fn(() => (req, res, next) => next()),
         require2FA: jest.fn(() => (req, res, next) => next()),
         requireAdmin: jest.fn((ctx, next) => next()),
@@ -135,6 +136,7 @@ describe('Auth Controller Factory - Dolphin Server Compatible', () => {
             expect(auth).toHaveProperty('enable2FA');
             expect(auth).toHaveProperty('verify2FA');
             expect(auth).toHaveProperty('disable2FA');
+            expect(auth).toHaveProperty('middleware');
             expect(auth).toHaveProperty('requireAuth');
             expect(auth).toHaveProperty('require2FA');
             expect(auth).toHaveProperty('requireAdmin');

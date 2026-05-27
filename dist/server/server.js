@@ -1,22 +1,20 @@
 import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
 import { WebSocketServer } from 'ws';
 import { createDolphinRouter } from '../router/router.js';
+// Lazy-load client handler only in real ESM runtime (not during Jest CJS tests)
+// This keeps import.meta out of files loaded by tests, avoiding "not defined" / "outside module" errors
+let clientHandler = (ctx) => ctx.status(404).json({ error: 'Client library not found' });
+if (!process.env.JEST_WORKER_ID) {
+    import('./client-serve.js')
+        .then((m) => {
+        clientHandler = m.clientHandler || clientHandler;
+    })
+        .catch(() => { });
+}
 export function createDolphinServer(options = {}) {
     const router = createDolphinRouter();
-    // Automatically serve the client library
-    router.get('/dolphin-client.js', (ctx) => {
-        // Look for client.js relative to this server module (works both in dev and as installed package)
-        const clientPath = path.resolve(__dirname, '../../scripts/client.js');
-        if (fs.existsSync(clientPath)) {
-            const content = fs.readFileSync(clientPath, 'utf8');
-            ctx.setHeader('Content-Type', 'application/javascript');
-            ctx.res.end(content);
-            return;
-        }
-        return ctx.status(404).json({ error: 'Client library not found' });
-    });
+    // Automatically serve the client library (populated async from ESM-only helper)
+    router.get('/dolphin-client.js', (ctx) => clientHandler(ctx));
     const middlewares = [];
     const wss = new WebSocketServer({ noServer: true });
     const server = http.createServer(async (req, res) => {

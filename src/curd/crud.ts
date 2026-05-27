@@ -1,6 +1,5 @@
-// crud.ts — Complete Working Version (All Tests Pass)
-
 import crypto from 'node:crypto';
+import { createDolphinRouter } from '../router/router.js';
 
 export interface DatabaseAdapter {
   createUser(data: any): Promise<any>;
@@ -316,4 +315,21 @@ export function createCrudController<T extends BaseDocument = BaseDocument>(
       ctx.json({ success: true, deleted: result });
     }
   };
+}
+
+export function createCrudRouter<T extends BaseDocument = BaseDocument>(
+  adapter: any,
+  collection: string,
+  options?: { enforceOwnership?: boolean; softDelete?: boolean; defaultLimit?: number }
+) {
+  const router = createDolphinRouter();
+  const ctrl = createCrudController<T>(adapter, collection, options);
+
+  router.get('/', ctrl.getAll);
+  router.get('/:id', ctrl.getOne);
+  router.post('/', ctrl.create);
+  router.put('/:id', ctrl.update);
+  router.delete('/:id', ctrl.delete);
+
+  return router;
 }

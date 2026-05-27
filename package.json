@@ -17,6 +17,7 @@
     "TUTORIAL_NEPALI.md",
     "DOLPHIN_MASTER_GUIDE_NEPALI.md",
     "scripts/client.js",
+    "scripts/client.mjs",
     "scripts/dolphin-persist.js"
   ],
   "exports": {
@@ -115,7 +116,11 @@
     },
     "./signaling/index.js": "./dist/signaling/index.js",
     "./cli": "./dist/bin/cli.js",
-    "./client": "./scripts/client.js",
+    "./client": {
+      "import": "./scripts/client.mjs",
+      "require": "./scripts/client.js",
+      "default": "./scripts/client.js"
+    },
     "./utils/ctx": {
       "types": "./dist/utils/ctx.d.ts",
       "default": "./dist/utils/ctx.js"

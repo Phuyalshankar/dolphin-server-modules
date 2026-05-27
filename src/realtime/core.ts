@@ -987,7 +987,7 @@ export class RealtimeCore extends EventEmitter {
 }
 
 // Export for use
-export { TopicTrie } from './trie';
-export { encode, decode, getSize } from './codec';
-export { RealtimePlugin, RealtimeContext } from './plugins';
-export { djson, toBuffer, toBase64 } from '../djson/djson';
+export { TopicTrie } from './trie.js';
+export { encode, decode, getSize } from './codec.js';
+export { RealtimePlugin, RealtimeContext } from './plugins.js';
+export { djson, toBuffer, toBase64 } from '../djson/djson.js';

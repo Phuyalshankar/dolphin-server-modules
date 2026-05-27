@@ -1,5 +1,4 @@
-// curd/crud.test.ts
-import { createCRUD } from './crud';
+import { createCRUD, createCrudRouter } from './crud';
 
 // Simple in-memory adapter for testing
 class TestAdapter {
@@ -115,5 +114,15 @@ describe('CRUD Tests', () => {
     
     expect(found).toBeDefined();
     expect(found.name).toBe('Find Me');
+  });
+
+  it('should create CRUD router with standard routes', () => {
+    const router = createCrudRouter(db, 'products');
+    expect(router).toBeDefined();
+    expect(router).toHaveProperty('get');
+    expect(router).toHaveProperty('post');
+    expect(router).toHaveProperty('put');
+    expect(router).toHaveProperty('delete');
+    expect(router._routes.length).toBe(5); // get all, get one, create, update, delete
   });
 });

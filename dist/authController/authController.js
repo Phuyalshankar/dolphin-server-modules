@@ -10,13 +10,22 @@ const getCookie = (req, name) => {
     return match ? match[2] : undefined;
 };
 export const createDolphinAuthController = (db, authConfig) => {
+    let realDb = db;
+    let realConfig = authConfig;
+    // Supports both positional createDolphinAuthController(db, config)
+    // and single object configuration createDolphinAuthController({ adapter: db, jwtSecret: '...' })
+    if (db && !authConfig && db.adapter) {
+        realDb = db.adapter;
+        realConfig = db;
+    }
+    const secretKey = realConfig?.secret || realConfig?.jwtSecret;
     const authCore = createAuth({
-        secret: authConfig.secret,
-        cookieMaxAge: authConfig.cookieMaxAge,
-        issuer: authConfig.issuer,
-        rateLimit: authConfig.rateLimit,
-        redisClient: authConfig.redisClient,
-        secureCookies: authConfig.secureCookies ?? false
+        secret: secretKey,
+        cookieMaxAge: realConfig?.cookieMaxAge,
+        issuer: realConfig?.issuer,
+        rateLimit: realConfig?.rateLimit,
+        redisClient: realConfig?.redisClient,
+        secureCookies: realConfig?.secureCookies ?? false
     });
     const verifyPassword = async (password, hash) => {
         try {
@@ -39,7 +48,7 @@ export const createDolphinAuthController = (db, authConfig) => {
     const handlers = {
         register: async (ctx) => {
             try {
-                const user = await authCore.register(db, ctx.body);
+                const user = await authCore.register(realDb, ctx.body);
                 return { success: true, data: user };
             }
             catch (err) {
@@ -56,7 +65,7 @@ export const createDolphinAuthController = (db, authConfig) => {
                         ctx.res.setHeader('Set-Cookie', `${name}=${value}; HttpOnly; Max-Age=${maxAgeSec}; Path=/; SameSite=Lax${secureFlag}`);
                     }
                 };
-                const result = await authCore.login(db, ctx.body, dolphinRes);
+                const result = await authCore.login(realDb, ctx.body, dolphinRes);
                 return { success: true, ...result };
             }
             catch (err) {
@@ -77,7 +86,7 @@ export const createDolphinAuthController = (db, authConfig) => {
                         ctx.res.setHeader('Set-Cookie', `${name}=${value}; HttpOnly; Max-Age=${maxAgeSec}; Path=/; SameSite=Lax${secureFlag}`);
                     }
                 };
-                const result = await authCore.refresh(db, refreshToken, dolphinRes);
+                const result = await authCore.refresh(realDb, refreshToken, dolphinRes);
                 return { success: true, ...result };
             }
             catch (err) {
@@ -90,7 +99,7 @@ export const createDolphinAuthController = (db, authConfig) => {
                 const refreshToken = getCookie(ctx.req, 'rt');
                 // ✅ Safe check: only call logout if token exists
                 if (refreshToken) {
-                    await authCore.logout(db, refreshToken);
+                    await authCore.logout(realDb, refreshToken);
                 }
                 // ✅ Path=/ नभए कुकी पूर्ण रुपमा डिलेट हुँदैन
                 ctx.res.setHeader('Set-Cookie', 'rt=; HttpOnly; Max-Age=0; Path=/; SameSite=Lax');
@@ -122,14 +131,14 @@ export const createDolphinAuthController = (db, authConfig) => {
                     throw new Error('Old and new password required');
                 if (newPassword.length < 8)
                     throw new Error('Password must be at least 8 characters');
-                const user = await db.findUserById(userId);
+                const user = await realDb.findUserById(userId);
                 if (!user)
                     throw new Error('User not found');
                 const isValid = await verifyPassword(oldPassword, user.password);
                 if (!isValid)
                     throw new Error('Current password is incorrect');
                 const hashedPassword = await hashPassword(newPassword);
-                await db.updateUser(userId, { password: hashedPassword });
+                await realDb.updateUser(userId, { password: hashedPassword });
                 return { success: true, message: 'Password changed successfully' };
             }
             catch (err) {
@@ -141,12 +150,12 @@ export const createDolphinAuthController = (db, authConfig) => {
                 const { email } = ctx.body;
                 if (!email)
                     throw new Error('Email required');
-                const user = await db.findUserByEmail(email);
+                const user = await realDb.findUserByEmail(email);
                 if (!user)
                     return { success: true, message: 'If email exists, reset link sent' };
                 const resetToken = generateResetToken();
                 const resetExpires = new Date(Date.now() + 3600000);
-                await db.updateUser(user.id, { resetPasswordToken: resetToken, resetPasswordExpires: resetExpires });
+                await realDb.updateUser(user.id, { resetPasswordToken: resetToken, resetPasswordExpires: resetExpires });
                 const resetLink = `${process.env.APP_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
                 return { success: true, message: 'Reset link sent', ...(process.env.NODE_ENV !== 'production' && { resetLink }) };
             }
@@ -161,13 +170,13 @@ export const createDolphinAuthController = (db, authConfig) => {
                     throw new Error('Token and password required');
                 if (newPassword.length < 8)
                     throw new Error('Password must be at least 8 characters');
-                let user = db.read ? (await db.read('User', { resetPasswordToken: token }))?.[0] : await db.findUserByResetToken(token);
+                let user = realDb.read ? (await realDb.read('User', { resetPasswordToken: token }))?.[0] : await realDb.findUserByResetToken(token);
                 if (!user)
                     throw new Error('Invalid or expired reset token');
                 if (user.resetPasswordExpires && new Date(user.resetPasswordExpires) < new Date())
                     throw new Error('Reset token has expired');
                 const hashedPassword = await hashPassword(newPassword);
-                await db.updateUser(user.id, { password: hashedPassword, resetPasswordToken: null, resetPasswordExpires: null });
+                await realDb.updateUser(user.id, { password: hashedPassword, resetPasswordToken: null, resetPasswordExpires: null });
                 return { success: true, message: 'Password reset successfully' };
             }
             catch (err) {
@@ -179,12 +188,12 @@ export const createDolphinAuthController = (db, authConfig) => {
                 const { email } = ctx.body;
                 if (!email)
                     throw new Error('Email required');
-                const user = await db.findUserByEmail(email);
+                const user = await realDb.findUserByEmail(email);
                 if (!user)
                     return { success: true, message: 'If email exists, reset link sent' };
                 const resetToken = generateResetToken();
                 const resetExpires = new Date(Date.now() + 3600000);
-                await db.updateUser(user.id, { resetPasswordToken: resetToken, resetPasswordExpires: resetExpires });
+                await realDb.updateUser(user.id, { resetPasswordToken: resetToken, resetPasswordExpires: resetExpires });
                 const resetLink = `${process.env.APP_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
                 return { success: true, message: 'Reset link sent', ...(process.env.NODE_ENV !== 'production' && { resetLink }) };
             }
@@ -194,7 +203,7 @@ export const createDolphinAuthController = (db, authConfig) => {
         },
         enable2FA: async (ctx) => {
             try {
-                const result = await authCore.enable2FA(db, ctx.req.user.id);
+                const result = await authCore.enable2FA(realDb, ctx.req.user.id);
                 return { success: true, ...result };
             }
             catch (err) {
@@ -204,7 +213,7 @@ export const createDolphinAuthController = (db, authConfig) => {
         verify2FA: async (ctx) => {
             try {
                 const { totp } = ctx.body;
-                const result = await authCore.verify2FA(db, ctx.req.user.id, totp);
+                const result = await authCore.verify2FA(realDb, ctx.req.user.id, totp);
                 return { success: true, ...result };
             }
             catch (err) {
@@ -214,7 +223,7 @@ export const createDolphinAuthController = (db, authConfig) => {
         disable2FA: async (ctx) => {
             try {
                 const { totp } = ctx.body;
-                await authCore.disable2FA(db, ctx.req.user.id, totp);
+                await authCore.disable2FA(realDb, ctx.req.user.id, totp);
                 return { success: true };
             }
             catch (err) {
@@ -223,6 +232,11 @@ export const createDolphinAuthController = (db, authConfig) => {
         },
     };
     const middleware = {
+        middleware: (opts) => {
+            return async (ctx, next) => {
+                await authCore.middleware(opts)(ctx.req, ctx.res, next);
+            };
+        },
         requireAuth: async (ctx, next) => {
             await authCore.middleware()(ctx.req, ctx.res, next);
         },

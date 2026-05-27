@@ -1,5 +1,6 @@
-export declare const createDolphinAuthController: (db: any, authConfig: any) => {
+export declare const createDolphinAuthController: (db: any, authConfig?: any) => {
     sanitize: (user: any) => any;
+    middleware: (opts?: any) => (ctx: any, next?: Function) => Promise<void>;
     requireAuth: (ctx: any, next?: Function) => Promise<void>;
     require2FA: (ctx: any, next?: Function) => Promise<void>;
     requireAdmin: (ctx: any, next?: Function) => Promise<void>;

@@ -1,4 +1,4 @@
-# 🐬 Dolphin Framework (v2.9.5)
+# 🐬 Dolphin Framework (v2.11.3)
 
 ![NPM Version](https://img.shields.io/npm/v/dolphin-server-modules?color=blue&style=flat-square)
 ![License](https://img.shields.io/npm/l/dolphin-server-modules?style=flat-square)
@@ -17,9 +17,9 @@ Dolphin Framework को विस्तृत र आधिकारिक ग�
 
 ---
 
-## 🤖 Cursor-Level AI Features (New in v2.9.5)
+## 🤖 Cursor-Level AI Features (New in v2.11.3)
 
-Dolphin v2.9.5 introduces a complete overhaul of the AI Agent, bringing it closer to professional AI editors like Cursor.
+Dolphin v2.11.3 introduces a complete overhaul of the AI Agent, bringing it closer to professional AI editors like Cursor.
 
 ### 1. Semantic Project Search
 The AI doesn't just look at one file; it indexes your entire project. When you ask a question, it uses semantic token overlap to find the 5 most relevant files automatically.
@@ -79,7 +79,7 @@ app.get('/ping', (ctx) => {
   return { message: 'pong', status: 'swimming' };
 });
 
-app.listen(3000, () => console.log("🐬 Dolphin v2.9.5 swimming on 3000"));
+app.listen(3000, () => console.log("🐬 Dolphin v2.11.3 swimming on 3000"));
 ```
 
 ---
@@ -89,7 +89,7 @@ app.listen(3000, () => console.log("🐬 Dolphin v2.9.5 swimming on 3000"));
 | Framework | RPS (Req/sec) | Cold Start | Realtime Throughput |
 | :--- | :--- | :--- | :--- |
 | Express.js | ~15,000 | 180ms | N/A |
-| **Dolphin V2.9** | **45,000+** | **< 10ms** | **35,000+ msgs/sec** |
+| **Dolphin V2.11** | **45,000+** | **< 10ms** | **35,000+ msgs/sec** |
 
 ---
 

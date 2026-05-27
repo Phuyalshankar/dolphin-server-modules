@@ -871,7 +871,7 @@ export class RealtimeCore extends EventEmitter {
     }
 }
 // Export for use
-export { TopicTrie } from './trie';
-export { encode, decode, getSize } from './codec';
-export { djson, toBuffer, toBase64 } from '../djson/djson';
+export { TopicTrie } from './trie.js';
+export { encode, decode, getSize } from './codec.js';
+export { djson, toBuffer, toBase64 } from '../djson/djson.js';
 //# sourceMappingURL=core.js.map
