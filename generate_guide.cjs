@@ -2,8 +2,11 @@ const fs = require('fs');
 
 const mdContent = fs.readFileSync('DOLPHIN_MASTER_GUIDE_NEPALI.md', 'utf8');
 
-// Escape backticks and dollar signs for template literals
-const escapedMd = mdContent.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+const escapedMd = mdContent
+  .replace(/\\/g, '\\\\')
+  .replace(/`/g, '\\`')
+  .replace(/\$/g, '\\$')
+  .replace(/<\/script>/gi, '<\\/script>');
 
 const cssContent = fs.readFileSync('style.css', 'utf8');
 
