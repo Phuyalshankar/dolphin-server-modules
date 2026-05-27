@@ -226,6 +226,16 @@ Latest Version: v2.11.4 | Updated: 2026-05-27 | License: ISC
 
 १८. API रेफरेन्स
 
+१९. CCTV Camera & RTSP Streaming: भिडियो म्यानेजमेन्ट र P2P सिङ्क (New v2.11.7)
+
+२०. Dolphin Microservices: API Gateway & WebRPC (New v2.11.7)
+
+२१. Universal HTTP Adapters: Express र Fastify सँग इन्टिग्रेसन (New v2.11.7)
+
+२२. Production Deployment (सर्भर लाइभ गर्ने)
+
+२३. निष्कर्ष (Conclusion)
+
 ०. परिचय र दर्शन (Introduction & Philosophy)
 Dolphin किन जन्मियो?
 ब्याकइन्ड डेभलपमेन्टको दुनियाँमा एक्सप्रेस (Express) सबैभन्दा लोकप्रिय छ। तर एक्सप्रेस पूरानो भइसक्यो। यसमा धेरै अनावश्यक वजन (Bloat) छ र यो मोडर्न एउटा (Modern) async/await सँग सधैँ राम्रोसँग काम गर्दैन।
@@ -933,33 +943,171 @@ import { createDolphinServer } from 'dolphin-server-modules/server';
 
 const app = createDolphinServer();
 
-const UserSchema = z.object({
-  name: z.string().min(3),
-  email: z.string().email(),
-  age: z.number().optional()
+const UserSchema = z.१९. CCTV Camera & RTSP Streaming: भिडियो म्यानेजमेन्ट र P2P सिङ्क (New v2.11.7) 📹
+Dolphin v2.11.7 मा थपिएको यो मोड्युलले औद्योगिक स्तरको भिडियो व्यवस्थापन प्रणाली (Video Management System - VMS) र टेलिकम इन्टरकम (Smart Intercom Telephony) को जग बसाल्छ।
+
+१९.१ Camera & RTSP Streaming Architecture
+- **CameraFrameModule**: यसले क्यामराबाट आउने बाइनरी इमेज बफर (\`MJPEG\`, \`H264\`, \`H265\`) हरूलाई बिना कुनै बाह्य सफ्टवेयर सिधै नोड जेएस (Node.js) बफरमै राखेर स्क्यान र पार्स गर्छ र \`rt.pubPush\` मार्फत लाइभ बाइनरी स्ट्रिम प्रसारण गर्छ।
+- **RtspPullerModule**: आईपी क्यामरा वा NVR को RTSP युआरएलबाट भिडियो फिड तान्न यसमा दुईवटा ब्याकइन्ड छन्:
+  १. **Pure TCP Backend**: कुनै भारी FFmpeg बिना नै नेटिभ TCP सकेट पार्सर मार्फत भिडियो तान्छ, जसले CPU को भार ९५% सम्म घटाउँछ।
+  २. **FFmpeg Backend**: जटिल कोडेकहरू (जस्तै H.264/H.265) को MJPEG ट्रान्सकोडिङका लागि \`ffmpeg\` प्रोसेस चलाउँछ।
+
+**RTSP क्यामरा जडान गर्ने उदाहरण:**
+\`\`\`typescript
+import { createCameraModule, createRtspPuller } from 'dolphin-server-modules/realtime';
+
+const camera = createCameraModule(rt);
+const puller = createRtspPuller(camera);
+
+// १. क्यामरा दर्ता गर्ने र RTSP फिड तान्न सुरु गर्ने
+puller.addCamera({
+  cameraId: 'gate-camera-1',
+  url: 'rtsp://admin:password@192.168.1.100:554/stream1',
+  backend: 'tcp', // वा 'ffmpeg'
+  expectedWidth: 1280,
+  expectedHeight: 720
 });
 
-const apiDocs = generateSwagger({
-  title: "DolphinStore API",
-  version: "1.0.0",
-  modules: [{
-    path: "/users",
-    method: "post",
-    schema: UserSchema,
-    summary: "Create new user",
-    tags: ["Users"]
-  }]
+// २. लाइभ बफर बाइनरी स्ट्रिम सुन्ने
+camera.subscribe('gate-camera-1', (frame) => {
+  console.log(\`फ्रेम प्राप्त भयो! साइज: \${frame.sizeBytes} bytes | Codec: \${frame.codec}\`);
+});
+\`\`\`
+
+१९.२ Universal WebRTC Intercom & Signaling System
+यस मोड्युलमा अस्पतालको नर्स कलिङ र अपार्टमेन्ट डोरफोन प्रणालीका लागि उपयुक्त **SIP-style Signaling** संयन्त्र जडान गरिएको छ। यसले ब्राउजर र NVR बीच WebRTC P2P (Peer-to-Peer) अडियो/भिडियो जडान गराउँछ:
+\`\`\`typescript
+import { createSignaling } from 'dolphin-server-modules/signaling';
+
+const telecom = createSignaling(rt);
+
+// १. इन्टरकम कल सुरु गर्ने (INVITE) र ACK ग्यारेन्टी गर्ने
+const ackReceived = await telecom.invite('resident-app-101', 'guard-console', {
+  roomNo: '101',
+  enableVideo: true
 });
 
-app.get('/docs', (ctx) => {
-  const html = serveSwaggerUI(apiDocs, "DolphinStore API");
-  return ctx.html(html);
+if (ackReceived) {
+  console.log("गार्ड कन्सोलसँग सञ्चार सुरु भयो!");
+}
+
+// २. गार्डले कल उठाउँदा (ACCEPT) र क्यामरा फिड P2P सिङ्क गराउँदा
+await telecom.accept('guard-console', 'resident-app-101', sdpOffer);
+\`\`\`
+
+---
+
+२०. Dolphin Microservices: API Gateway & WebRPC (New v2.11.7) 🚀
+डल्फिनलाई एउटै सर्भरबाट बहु-सर्भर माइक्रोसर्भिस आर्किटेक्चर (Microservices Architecture) मा लान दुईवटा नवीनतम मोड्युल थपिएका छन्।
+
+२०.१ Dolphin API Gateway (केन्द्रीय प्रोक्सी ढोका)
+यसले बाहिरबाट आउने HTTP र WebSocket अनुरोधहरूलाई सही माइक्रोसर्भिस (Auth, Products, Stream Services) मा पाइप (Stream pipe) र टनेल प्रोक्सी गर्छ:
+\`\`\`typescript
+import { DolphinAPIGateway } from 'dolphin-server-modules/gateway';
+
+const gateway = new DolphinAPIGateway({
+  routes: {
+    '/api/auth/*': 'http://localhost:3001',     // Auth Service
+    '/api/products/*': 'http://localhost:3002', // Product CRUD Service
+    '/realtime': 'ws://localhost:3003'          // Distributed Realtime Service
+  }
 });
 
-app.get('/docs/json', (ctx) => ctx.json(apiDocs));
-rt.register(deviceId, socket?, metadata?)	डिभाइस रजिस्टर
-१६. DolphinStore: रिएक्टिभ स्टेट म्यानेजमेन्ट र फिल्टरिङ (Reactive State) 🐬
-Dolphin v2.11.4 मा थपिएको \`DolphinStore\` ले फ्रन्टइन्डमा डेटा म्यानेजमेन्टलाई अर्को स्तरमा पुर्‍याउँछ। यसले ब्याकइन्डको डेटालाई अटोमेटिक सिङ्क मात्र गर्दैन, तर फिल्टरिङ, सर्टिङ र लोड स्टेटहरू पनि म्यानेज गर्छ।
+gateway.listen(3000, '0.0.0.0', () => {
+  console.log("Dolphin API Gateway successfully running on port 3000! 🎛️");
+});
+\`\`\`
+
+२०.२ Dolphin WebRPC (द्रुत अन्तर-सेवा सञ्चार)
+जाभास्क्रिप्ट \`Proxy\` मा आधारित यो मोड्युलले दुई माइक्रोसर्भिस बीच बिना कुनै झन्झट स्थानीय फङ्सन कल गरे जस्तै गरी (Remote Procedure Call) काम गर्छ:
+
+**RPC Server (UserService - Port 4001):**
+\`\`\`typescript
+import { DolphinRPCServer } from 'dolphin-server-modules/rpc';
+
+class UserService {
+  async getUserInfo(id: string) {
+    return { id, name: "Dr. Ram Prasad", role: "doctor" };
+  }
+}
+
+const rpcServer = new DolphinRPCServer();
+rpcServer.register('User', new UserService());
+rpcServer.listen(4001);
+\`\`\`
+
+**RPC Client (OrderService calling UserService):**
+\`\`\`typescript
+import { DolphinRPCClient } from 'dolphin-server-modules/rpc';
+
+const client = new DolphinRPCClient({ url: 'http://localhost:4001' });
+const userService = client.getService<any>('User');
+
+// स्थानीय फङ्सन कल गरे जस्तै गरी रिमोट सर्भरको फङ्सन ए-सिङ्क कल गर्ने!
+const doctor = await userService.getUserInfo('doc_789');
+console.log(doctor.name); // Output: "Dr. Ram Prasad"
+\`\`\`
+
+---
+
+२१. Universal HTTP Adapters: Express र Fastify सँग इन्टिग्रेसन (New v2.11.7) 🔌
+डल्फिनका कन्ट्रोलरहरू र CRUD रुटहरूलाई तपाईँले एक्सप्रेस (Express) वा फास्टिफाइ (Fastify) सर्भरमा सिधै प्लग-इन गर्न सक्नुहुन्छ। यसका लागि डल्फिनले \`toExpress\` र \`toFastify\` एडेप्टरहरू प्रदान गर्छ जसले फ्रेमवर्कको \`ctx\` लाई एक्सप्रेस/फास्टिफाइको \`req/res\` सँग स्वतः रूपान्तरण गर्छ:
+
+\`\`\`typescript
+import express from 'express';
+import { createCrudController, toExpress } from 'dolphin-server-modules';
+import { db } from './db.js';
+
+const app = express();
+app.use(express.json());
+
+const ctrl = createCrudController(db, 'Products');
+
+// एक्सप्रेस भित्र डल्फिन कन्ट्रोलर रन गर्ने!
+app.get('/api/products', toExpress(ctrl.getAll));
+app.post('/api/products', toExpress(ctrl.create));
+app.put('/api/products/:id', toExpress(ctrl.update));
+
+app.listen(3000, () => console.log("Express integrated with Dolphin Controllers! 🔌"));
+\`\`\`
+
+---
+
+२२. Production Deployment (सर्भर लाइभ गर्ने)
+तपाईँको Dolphin सर्भर रकेट जस्तै तयार छ। अब यसलाई लाइभ (World Wide Web) मा राख्न PM2 प्रयोग गरिन्छ जसले क्र्यास भएको खण्डमा तुरुन्त (0.1ms) सर्भरलाई अटो-रिस्टार्ट (Auto-Restart) गर्छ।
+
+PM2 इन्स्टल र सुरु गर्न:
+\`\`\`bash
+# 1. PM2 लाई Global रूपमा राख्ने
+npm install -g pm2
+
+# 2. तपाईंको Code लाई Build गर्ने
+npm run build
+
+# 3. PM2 द्वारा Background मा सर्भर सुरु गर्ने
+pm2 start dist/index.js --name "dolphin-iot-backend"
+
+# 4. सर्भरका Logs (Error/Info) हेर्न
+pm2 logs dolphin-iot-backend
+\`\`\`
+
+२३. निष्कर्ष (Conclusion)
+बधाई छ! तपाईँले Dolphin Framework को Master Guide पूरा गर्नुभयो। अब तपाईँ:
+
+✅ हाई-पर्फर्मेन्स API सर्भर बनाउन
+✅ अटोमेटेड CRUD र भ्यालिडेसन प्रयोग गर्न
+✅ RealtimeCore v2.0 सँग पूर्ण रियलटाइम एप्लिकेसन बनाउन
+✅ pubPush/subPull सँग हाई-फ्रिक्वेन्सी डेटा ह्यान्डल गर्न
+✅ pubFile/subFile सँग ठूला फाइलहरू रिज्युम सपोर्ट सहित ट्रान्सफर गर्न
+✅ Device Management सँग डिभाइसहरू ट्र्याक गर्न
+✅ WebRTC Intercom, IP Camera & RTSP Parser व्यवस्थापन गर्न
+✅ Express/Fastify एडेप्टर र API Gateway सँग माइक्रोसर्भिस सञ्चालन गर्न
+✅ अटो-जेनेरेटेड Swagger डकुमेन्टेसन बनाउन
+
+सक्नुहुन्छ।
+
+Happy Coding! 🐬🇳🇵
+नेपालबाट विश्वस्तरको सफ्टवेयर बनाऔँ!��, तर फिल्टरिङ, सर्टिङ र लोड स्टेटहरू पनि म्यानेज गर्छ।
 
 १६.१ स्टेट ट्र्याकिङ (State Tracking)
 प्रत्येक कलेक्सनमा अब निम्न स्टेटहरू हुन्छन्:
