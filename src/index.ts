@@ -18,3 +18,8 @@ export * from './djson/djson.js';
 // Resolve naming conflict for DatabaseAdapter
 export { DatabaseAdapter } from './curd/crud.js';
 export type { DatabaseAdapter as AuthDatabaseAdapter } from './auth/auth.js';
+
+// Microservices & HTTP Framework Adapters
+export * from './rpc/rpc.js';
+export * from './gateway/gateway.js';
+export * from './utils/adapters.js';

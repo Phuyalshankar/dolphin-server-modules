@@ -1,4 +1,4 @@
-# 🐬 Dolphin Framework (v2.11.4)
+# 🐬 Dolphin Framework (v2.11.7)
 
 ![NPM Version](https://img.shields.io/npm/v/dolphin-server-modules?color=blue&style=flat-square)
 ![License](https://img.shields.io/npm/l/dolphin-server-modules?style=flat-square)
@@ -66,38 +66,62 @@ npx dolphin serve --port=3000
 
 ---
 
-## 🚀 Quick Start (Modern ESM Only)
+## 🚀 Microservices & Smart Intercom Ecosystem (New in v2.11.7)
 
-Dolphin strictly uses **ES Modules (import/export)**. The use of `require()` is discouraged as it causes compatibility issues in modern Node.js environments.
+Dolphin v2.11.7 introduces a complete suite of enterprise-grade microservice modules and smart building signaling/streaming pipelines:
 
+### 1. Universal HTTP Framework Adapters
+Run Dolphin's Mongoose-synced CRUD controllers and Auth middleware directly inside **Express** or **Fastify**!
 ```javascript
-import { createDolphinServer } from 'dolphin-server-modules/server';
+import express from 'express';
+import { createCrudController, toExpress } from 'dolphin-server-modules';
 
-const app = createDolphinServer();
+const app = express();
+const ctrl = createCrudController(db, 'Products');
 
-app.get('/ping', (ctx) => {
-  return { message: 'pong', status: 'swimming' };
-});
-
-app.listen(3000, () => console.log("🐬 Dolphin v2.11.4 swimming on 3000"));
+app.get('/api/products', toExpress(ctrl.getAll));
 ```
 
----
+### 2. High-Performance WebRPC
+Decouple service interactions with a type-safe, Proxy-based, sub-millisecond remote procedure call (RPC) client/server engine:
+```javascript
+import { DolphinRPCClient } from 'dolphin-server-modules/rpc';
 
-## 📊 2026 Performance Benchmarks
+const client = new DolphinRPCClient({ url: 'http://localhost:4001' });
+const userService = client.getService('User');
 
-| Framework | RPS (Req/sec) | Cold Start | Realtime Throughput |
-| :--- | :--- | :--- | :--- |
-| Express.js | ~15,000 | 180ms | N/A |
-| **Dolphin V2.11** | **45,000+** | **< 10ms** | **35,000+ msgs/sec** |
+// Call remote methods asynchronously as if they were local!
+const user = await userService.getUserInfo('user_123');
+```
+
+### 3. API Gateway Router
+A zero-dependency reverse proxy server that redirects HTTP and WebSocket upgrade streams dynamically:
+```javascript
+import { DolphinAPIGateway } from 'dolphin-server-modules/gateway';
+
+const gateway = new DolphinAPIGateway({
+  routes: {
+    '/api/auth/*': 'http://localhost:3001',
+    '/api/products/*': 'http://localhost:3002',
+    '/realtime': 'ws://localhost:3003'
+  }
+});
+gateway.listen(3000);
+```
+
+### 4. CCTV Camera, RTSP Puller & WebRTC Intercom
+- **RtspPullerModule**: Feeds streams from IP cameras/NVRs. Features a **Pure TCP RTP buffer parser** (zero external binaries/FFmpeg!) for low-resource environments, and FFmpeg Fallbacks.
+- **UniversalSignaling**: A telecom-ready WebRTC signaling server with native invite-accept-reject-end handshakes and bidirectional ACK confirmations—perfect for smart doorphones and nurse calling systems!
 
 ---
 
 ## 🗺️ Roadmap
 - [x] **Agentic AI Scaffolding**: Full project generation via Gemini/Groq
 - [x] **Semantic Search & Symbol Indexing**: Precision context building
-- [x] **Multi-Model Support**: Gemini, Groq, and Local Ollama
 - [x] **Precision Patching**: AST-style surgical code edits
+- [x] **Express/Fastify Adapters**: Pluggable Dolphin Context middleware
+- [x] **Independent WebRPC & API Gateway**: High-speed microservices orchestration
+- [x] **IP Camera RTSP & WebRTC Intercom**: Pure TCP stream parsing and VoIP SIP signaling
 - [ ] **One-Click Deployment**: Deploy to Vercel/Cloudflare from CLI
 - [ ] **Visual Debugger**: Built-in web dashboard for monitoring
 

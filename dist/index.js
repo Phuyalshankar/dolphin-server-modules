@@ -13,4 +13,8 @@ export * from './server/server.js';
 export * from './router/router.js';
 export * from './utils/ctx.js';
 export * from './djson/djson.js';
+// Microservices & HTTP Framework Adapters
+export * from './rpc/rpc.js';
+export * from './gateway/gateway.js';
+export * from './utils/adapters.js';
 //# sourceMappingURL=index.js.map
