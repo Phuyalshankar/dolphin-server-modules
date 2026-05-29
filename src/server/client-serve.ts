@@ -10,7 +10,7 @@ export function clientHandler(ctx: any) {
   const clientPath = path.resolve(__dirname, '../../scripts/client.js');
   if (fs.existsSync(clientPath)) {
     const content = fs.readFileSync(clientPath, 'utf8');
-    ctx.setHeader('Content-Type', 'application/javascript');
+    ctx.setHeader('Content-Type', 'application/javascript; charset=utf-8');
     ctx.res.end(content);
     return;
   }

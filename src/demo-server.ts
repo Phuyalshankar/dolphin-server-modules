@@ -4,6 +4,7 @@ import { createDolphinServer } from './server/server.js';
 import { createCRUD } from './curd/crud.js';
 import { createMongooseAdapter } from './adapters/mongoose/index.js';
 import { RealtimeCore } from './realtime/core.js';
+import { createSignaling } from './signaling/index.js';
 import path from 'path';
 
 // ===== Mongoose Models =====
@@ -51,6 +52,55 @@ async function bootstrap() {
 
   // 5. Dolphin server
   const app = createDolphinServer({ realtime: rt });
+
+  // ===== HTTP Intercom Phone System Endpoints =====
+  const phone = createSignaling(rt);
+  const activeDevices = new Set<string>();
+
+  // Register device status on Intercom
+  app.post('/api/intercom/register', (ctx: any) => {
+    const { deviceId } = ctx.body;
+    if (deviceId) {
+      activeDevices.add(deviceId);
+      console.log(`📟 Device Registered on Intercom: ${deviceId}`);
+      ctx.json({ success: true, registered: deviceId, active: Array.from(activeDevices) });
+    } else {
+      ctx.status(400).json({ error: 'Missing deviceId' });
+    }
+  });
+
+  // Get active devices list
+  app.get('/api/intercom/devices', (ctx: any) => {
+    ctx.json({ devices: Array.from(activeDevices) });
+  });
+
+  // Emergency Invite Intercom Call
+  app.post('/api/intercom/invite', async (ctx: any) => {
+    const { from, to, message } = ctx.body;
+    if (!from || !to) {
+      return ctx.status(400).json({ error: 'Missing from/to parameters' });
+    }
+    console.log(`📞 Intercom Invite: [${from}] calling [${to}] with message: "${message || ''}"`);
+    
+    const success = await phone.invite(from, to, { message, timestamp: Date.now() });
+    ctx.json({ success, status: success ? 'Ringing' : 'Offline/No Answer' });
+  });
+
+  // Intercom Accept Call
+  app.post('/api/intercom/accept', async (ctx: any) => {
+    const { from, to } = ctx.body;
+    console.log(`✅ Intercom Accept: [${from}] accepted call from [${to}]`);
+    const success = await phone.accept(from, to);
+    ctx.json({ success });
+  });
+
+  // Intercom End / Hangup Call
+  app.post('/api/intercom/end', async (ctx: any) => {
+    const { from, to, reason } = ctx.body;
+    console.log(`🛑 Intercom End: [${from}] hung up call with [${to}] (Reason: ${reason || 'normal'})`);
+    const success = await phone.end(from, to, reason);
+    ctx.json({ success });
+  });
 
   // ===== CORRECT ROUTE MAPPINGS =====
 

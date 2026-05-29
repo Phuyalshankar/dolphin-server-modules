@@ -1,3 +1,4 @@
+export {};
 /**
  * client.test.ts — DolphinClient को लागि Jest unit tests
  *
@@ -191,6 +192,34 @@ describe('APIHandler — proxy paths', () => {
     await c.api.me.get();
     const [, opts] = (global as any).fetch.mock.calls[0];
     expect(opts.headers['Authorization']).toBe('Bearer tok99');
+  });
+
+  test('autoBroadcast — POST request पछि realtime publish गर्छ', async () => {
+    const cAuto = new DolphinClient('http://localhost:3000', 'dev', { autoBroadcast: true });
+    cAuto.publish = jest.fn();
+    (global as any).fetch = makeFetch(200, { data: 'success' });
+    
+    await cAuto.api.request('POST', '/api/users', { name: 'Ram' });
+    
+    expect(cAuto.publish).toHaveBeenCalledWith('api/users', {
+      method: 'POST',
+      payload: { name: 'Ram' },
+      result: { data: 'success' }
+    });
+  });
+
+  test('hookless auth — API response मा accessToken आउँदा आफैँ सेभ गर्छ', async () => {
+    const cAuth = new DolphinClient('http://localhost:3000');
+    (global as any).fetch = makeFetch(200, { 
+      accessToken: 'hookless-token-123', 
+      user: { id: 1, name: 'Sita' } 
+    });
+    
+    // Using generic API handler instead of auth.login
+    await cAuth.api.request('POST', '/api/auth/login', { email: 'a@b.com', password: '123' });
+    
+    expect(cAuth.accessToken).toBe('hookless-token-123');
+    expect(cAuth.auth.user).toEqual({ id: 1, name: 'Sita' });
   });
 });
 

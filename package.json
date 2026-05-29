@@ -1,6 +1,6 @@
 {
   "name": "dolphin-server-modules",
-  "version": "2.11.7",
+  "version": "2.12.2",
   "type": "module",
   "homepage": "https://github.com/Phuyalshankar/dolphin-server-modules#readme",
   "description": "Core utility modules for Auth, CRUD, and Controllers",
@@ -128,12 +128,13 @@
     "./utils/ctx.js": "./dist/utils/ctx.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build:client && tsc",
     "start": "node dist/demo-server.js",
     "dolphin": "node dist/bin/cli.js",
     "dev": "npm run build && npm run start",
     "test": "jest",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "build:client": "esbuild src/client/index.ts --bundle --outfile=scripts/client.js --format=iife --global-name=DolphinModule"
   },
   "keywords": [
     "dolphin",
@@ -161,6 +162,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.11.30",
     "@types/ws": "^8.18.1",
+    "esbuild": "^0.28.0",
     "jest": "^29.7.0",
     "mongodb-memory-server": "^11.0.1",
     "ts-jest": "^29.1.2",

@@ -14,6 +14,7 @@
 Dolphin Framework को विस्तृत र आधिकारिक गाइड उपलब्ध छ। यसमा **Auth, CRUD, Models, र Controllers** को १००% ट्युटोरियल समावेश छ।
 
 👉 **[Dolphin Master Guide (Web Version)](https://raw.githack.com/Phuyalshankar/dolphin-server-modules/main/guide.html)** *(Most Up-to-Date)*
+👉 **[Dolphin Client Tutorial (Nepali)](./CLIENT_TUTORIAL_NEPALI.md)**
 
 ---
 
@@ -112,6 +113,26 @@ gateway.listen(3000);
 ### 4. CCTV Camera, RTSP Puller & WebRTC Intercom
 - **RtspPullerModule**: Feeds streams from IP cameras/NVRs. Features a **Pure TCP RTP buffer parser** (zero external binaries/FFmpeg!) for low-resource environments, and FFmpeg Fallbacks.
 - **UniversalSignaling**: A telecom-ready WebRTC signaling server with native invite-accept-reject-end handshakes and bidirectional ACK confirmations—perfect for smart doorphones and nurse calling systems!
+
+### 5. 100% Hookless Realtime Architecture (New)
+Dolphin introduces `autoBroadcast` and `DolphinStore` allowing you to manage full CRUD data flows in React without writing a single `useState`, `useEffect`, or `onSubmit` handler.
+```javascript
+// 1. Initialize with autoBroadcast
+const dolphin = new DolphinClient('http://localhost:3000', 'dev', { autoBroadcast: true });
+
+// 2. Hookless Form (Automatically syncs to Database and publishes via WebSocket)
+<form data-api-submit="POST /api/products">
+  <input name="productName" />
+  <button type="submit">Save</button>
+</form>
+
+// 3. Auto-updating UI
+const store = useSyncExternalStore(
+  (listener) => dolphin.store.subscribe(listener),
+  () => dolphin.store.getSnapshot('products')
+);
+// 'store.items' updates in realtime automatically when ANY user submits!
+```
 
 ---
 

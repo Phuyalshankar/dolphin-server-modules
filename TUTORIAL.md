@@ -80,21 +80,44 @@ npx dolphin add adapter mongoose
 
 ---
 
-## 5. Reactive Frontend Store
+## 5. Reactive Frontend Store & Hookless Architecture
 
-Dolphin provides a powerful reactive store in the client library that manages your data and tracking states automatically.
+Dolphin provides a powerful reactive store in the client library that manages your data and tracking states automatically. With the new `autoBroadcast` feature, you can build entire React applications without using `useState`, `useEffect`, or `onSubmit`!
 
-```html
-<script src="/dolphin-client.js"></script>
-<script>
-  async function init() {
-    const products = dolphin.store.products;
-    if (products.loading) console.log("Fetching data...");
-    
-    // items are automatically synced with the server
-    console.log(products.items);
-  }
-</script>
+```javascript
+import { useSyncExternalStore } from 'react';
+import { DolphinClient } from 'dolphin-server-modules/client';
+
+// 1. Enable autoBroadcast
+const dolphin = new DolphinClient('http://localhost:3000', 'dev', { autoBroadcast: true });
+
+function ProductApp() {
+  // 2. React automatically re-renders when data changes anywhere!
+  const products = useSyncExternalStore(
+    (listener) => dolphin.store.subscribe(listener),
+    () => dolphin.store.getSnapshot('products')
+  );
+
+  return (
+      {/* 3. Hookless Form: Submits to DB and broadcasts to WebSocket automatically */}
+      <form data-api-submit="POST /api/products">
+        <input name="name" required />
+        <button type="submit">Add Product</button>
+      </form>
+
+      {/* 4. Hookless Auth & Navigation */}
+      <form data-api-submit="POST /api/auth/login" data-api-reload>
+        <input type="email" name="email" required />
+        <input type="password" name="password" required />
+        <button type="submit">Login</button>
+      </form>
+
+      <ul>
+        {products.items.map(p => <li key={p.id}>{p.name}</li>)}
+      </ul>
+    </div>
+  );
+}
 ```
 
 ---

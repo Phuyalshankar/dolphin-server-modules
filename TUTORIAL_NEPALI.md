@@ -98,7 +98,43 @@ OLLAMA_MODEL=gemma3:latest
 
 ---
 
-## ७. अन्तिममा (Conclusion)
+## ७. Hookless Data Management (autoBroadcast) [NEW]
+
+Dolphin मा अब `autoBroadcast` सुविधा थपिएको छ। यसको मद्दतले तपाईँले React मा `useState`, `useEffect`, वा `onSubmit` लेख्नै पर्दैन।
+
+```jsx
+import { useSyncExternalStore } from 'react';
+import { DolphinClient } from 'dolphin-server-modules/client';
+
+// १. autoBroadcast अन गर्नुहोस्
+const dolphin = new DolphinClient('http://localhost:3000', 'dev', { autoBroadcast: true });
+
+function ProductApp() {
+  // २. डेटा आफैँ सिंक (Sync) हुन्छ
+  const products = useSyncExternalStore(
+    (listener) => dolphin.store.subscribe(listener),
+    () => dolphin.store.getSnapshot('products')
+  );
+
+  return (
+    <div>
+      {/* ३. Hookless फर्म: यसले आफैँ API कल गर्छ र सबै प्रयोगकर्तालाई Realtime मा अपडेट पठाउँछ */}
+      <form data-api-submit="POST /api/products">
+        <input name="name" placeholder="प्रोडक्टको नाम" required />
+        <button type="submit">थप्नुहोस्</button>
+      </form>
+
+      <ul>
+        {products.items.map(p => <li key={p.id}>{p.name}</li>)}
+      </ul>
+    </div>
+  );
+}
+```
+
+---
+
+## ८. अन्तिममा (Conclusion)
 
 Dolphin Framework अब एउटा सामान्य फ्रेमवर्क मात्र होइन, यो तपाईँको एउटा "एआई साथी" पनि हो। यसले तपाईँको कोडिङ स्पिड १० गुणा बढाउन मद्दत गर्छ।
 
