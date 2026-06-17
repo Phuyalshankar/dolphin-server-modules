@@ -6,6 +6,7 @@ export interface DatabaseAdapter {
   findUserByEmail(email: string): Promise<any>;
   findUserById(id: string): Promise<any>;
   updateUser(id: string, data: any): Promise<any>;
+  findUserByResetToken(token: string): Promise<any>;
   saveRefreshToken(data: any): Promise<void>;
   findRefreshToken(token: string): Promise<any>;
   deleteRefreshToken(token: string): Promise<void>;
@@ -111,6 +112,21 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
       for (const k of keys) {
         const av = (a as any)[k];
         const bv = (b as any)[k];
+        
+        // Handle null/undefined values
+        if (av == null && bv == null) continue;
+        if (av == null) return sort[k] === 'asc' ? -1 : 1;
+        if (bv == null) return sort[k] === 'asc' ? 1 : -1;
+        
+        // Handle different types
+        if (typeof av !== typeof bv) {
+          // Treat numbers < strings < booleans < objects for consistency
+          const typeOrder = ['number', 'string', 'boolean', 'object'];
+          const at = typeOrder.indexOf(typeof av);
+          const bt = typeOrder.indexOf(typeof bv);
+          return sort[k] === 'asc' ? (at - bt) : (bt - at);
+        }
+        
         if (av === bv) continue;
         return sort[k] === 'asc' ? (av > bv ? 1 : -1) : (av > bv ? -1 : 1);
       }
@@ -151,7 +167,7 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
       const finalFilter = fixId(withOwnership(filter, userId));
       
       if (db.advancedRead) {
-        items = await db.advancedRead(collection, finalFilter, options);
+        items = filterDeleted(await db.advancedRead(collection, finalFilter, options));
       } else {
         const raw = await db.read(collection, {});
         items = filterDeleted(raw).filter(i => matchFilter(i, finalFilter));

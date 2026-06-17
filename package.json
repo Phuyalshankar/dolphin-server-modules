@@ -1,6 +1,6 @@
 {
   "name": "dolphin-server-modules",
-  "version": "2.12.2",
+  "version": "2.14.0",
   "type": "module",
   "homepage": "https://github.com/Phuyalshankar/dolphin-server-modules#readme",
   "description": "Core utility modules for Auth, CRUD, and Controllers",
@@ -18,7 +18,11 @@
     "DOLPHIN_MASTER_GUIDE_NEPALI.md",
     "scripts/client.js",
     "scripts/client.mjs",
-    "scripts/dolphin-persist.js"
+    "scripts/client.browser.js",
+    "scripts/dolphin-persist.js",
+    "independent-modules/e2e-cryptography",
+    "independent-modules/push-notifications",
+    "independent-modules/webrtc-calling"
   ],
   "exports": {
     ".": {
@@ -125,16 +129,28 @@
       "types": "./dist/utils/ctx.d.ts",
       "default": "./dist/utils/ctx.js"
     },
-    "./utils/ctx.js": "./dist/utils/ctx.js"
+    "./utils/ctx.js": "./dist/utils/ctx.js",
+    "./e2e": {
+      "types": "./independent-modules/e2e-cryptography/dist/index.d.ts",
+      "default": "./independent-modules/e2e-cryptography/dist/index.js"
+    },
+    "./push": {
+      "types": "./independent-modules/push-notifications/dist/index.d.ts",
+      "default": "./independent-modules/push-notifications/dist/index.js"
+    },
+    "./webrtc": {
+      "types": "./independent-modules/webrtc-calling/dist/index.d.ts",
+      "default": "./independent-modules/webrtc-calling/dist/index.js"
+    }
   },
   "scripts": {
-    "build": "npm run build:client && tsc",
+    "build": "npm run build:client && tsc && tsc -p independent-modules/e2e-cryptography && tsc -p independent-modules/push-notifications && tsc -p independent-modules/webrtc-calling",
     "start": "node dist/demo-server.js",
     "dolphin": "node dist/bin/cli.js",
     "dev": "npm run build && npm run start",
     "test": "jest",
     "prepublishOnly": "npm run build",
-    "build:client": "esbuild src/client/index.ts --bundle --outfile=scripts/client.js --format=iife --global-name=DolphinModule"
+    "build:client": "node -e \"const fs = require('fs'); const path = require('path'); const main = require.resolve('dolphin-client'); const distDir = path.dirname(main); fs.copyFileSync(path.join(distDir, 'dolphin-client.js'), 'scripts/client.browser.js');\""
   },
   "keywords": [
     "dolphin",
@@ -151,6 +167,7 @@
   "license": "ISC",
   "dependencies": {
     "argon2": "^0.40.1",
+    "dolphin-client": "^1.1.2",
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.3.2",

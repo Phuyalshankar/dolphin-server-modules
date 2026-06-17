@@ -273,7 +273,8 @@ export class RtspPullerModule extends EventEmitter {
           start = i;
         }
         if (start !== -1 && buf[i] === 0xFF && buf[i + 1] === 0xD9) {
-          const frame = buf.slice(start, i + 2);
+          const frame = Buffer.alloc(i + 2 - start);
+          buf.copy(frame, 0, start, i + 2);
           this.forwardFrame(handle, frame);
           buf = buf.slice(i + 2);
           start = -1;
@@ -416,7 +417,8 @@ export class RtspPullerModule extends EventEmitter {
               // Detect JPEG boundaries
               for (let i = 0; i < mjpegBuffer.length - 1; i++) {
                 if (mjpegBuffer[i] === 0xFF && mjpegBuffer[i + 1] === 0xD9) {
-                  const frame = mjpegBuffer.slice(0, i + 2);
+                  const frame = Buffer.alloc(i + 2);
+                  mjpegBuffer.copy(frame, 0, 0, i + 2);
                   if (frame[0] === 0xFF && frame[1] === 0xD8) {
                     this.forwardFrame(handle, frame);
                   }

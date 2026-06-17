@@ -26,6 +26,10 @@ class MockAuthDB implements DatabaseAdapter {
     if (idx > -1) this.users[idx] = { ...this.users[idx], ...data };
     return this.users[idx];
   }
+
+  async findUserByResetToken(token: string) {
+    return this.users.find(u => u.resetPasswordToken === token);
+  }
   
   async saveRefreshToken(data: RefreshTokenRecord) { 
     this.tokens.push(data); 
@@ -55,34 +59,91 @@ describe('Auth Module', () => {
 
   describe('Registration', () => {
     it('registers a new user successfully', async () => {
-      const user = await auth.register(db, { 
-        email: 'test@example.com', 
-        password: 'password123' 
-      });
-      
-      expect(user.email).toBe('test@example.com');
-      expect(user.role).toBe('user');
-      expect(user.id).toBeDefined();
+    const user = await auth.register(db, { 
+      email: 'test@example.com', 
+      password: 'Password123' 
     });
+    
+    expect(user.email).toBe('test@example.com');
+    expect(user.role).toBe('user');
+    expect(user.id).toBeDefined();
+  });
 
-    it('throws error for missing fields', async () => {
-      await expect(auth.register(db, { email: '', password: '123' }))
-        .rejects.toThrow('Missing fields');
+  it('throws error for missing fields', async () => {
+    await expect(auth.register(db, { email: '', password: '123' }))
+      .rejects.toThrow('Missing fields');
+  });
+
+  it('throws error for weak password (too short)', async () => {
+    await expect(auth.register(db, { 
+      email: 'weak@example.com', 
+      password: 'Pass1' 
+    })).rejects.toThrow('Password must be at least 8 characters');
+  });
+
+  it('throws error for weak password (no uppercase)', async () => {
+    await expect(auth.register(db, { 
+      email: 'weak@example.com', 
+      password: 'password123' 
+    })).rejects.toThrow('Password must contain at least one uppercase letter');
+  });
+
+  it('throws error for weak password (no lowercase)', async () => {
+    await expect(auth.register(db, { 
+      email: 'weak@example.com', 
+      password: 'PASSWORD123' 
+    })).rejects.toThrow('Password must contain at least one lowercase letter');
+  });
+
+  it('throws error for weak password (no number)', async () => {
+    await expect(auth.register(db, { 
+      email: 'weak@example.com', 
+      password: 'Password' 
+    })).rejects.toThrow('Password must contain at least one number');
+  });
+
+  it('throws error for duplicate email registration', async () => {
+    await auth.register(db, { 
+      email: 'duplicate@example.com', 
+      password: 'Password123' 
     });
+    
+    await expect(auth.register(db, { 
+      email: 'duplicate@example.com', 
+      password: 'Password456' 
+    })).rejects.toThrow('Email already registered');
+  });
+
+  it('throws error for case-insensitive duplicate email registration', async () => {
+    await auth.register(db, { 
+      email: 'CaseSensitive@Example.com', 
+      password: 'Password123' 
+    });
+    
+    await expect(auth.register(db, { 
+      email: 'casesensitive@example.com', 
+      password: 'Password456' 
+    })).rejects.toThrow('Email already registered');
+    
+    await expect(auth.register(db, { 
+      email: 'CASESENSITIVE@EXAMPLE.COM', 
+      password: 'Password789' 
+    })).rejects.toThrow('Email already registered');
+  });
   });
 
   describe('Login', () => {
     beforeEach(async () => {
       await auth.register(db, { 
         email: 'test@example.com', 
-        password: 'password123' 
+        password: 'Password123' 
       });
     });
 
     it('logs in successfully with correct credentials', async () => {
       const result = await auth.login(db, { 
         email: 'test@example.com', 
-        password: 'password123' 
+        password: 'Password123' 
       });
       
       expect(result.accessToken).toBeDefined();
@@ -112,13 +173,13 @@ describe('Auth Module', () => {
     beforeEach(async () => {
       const user = await auth.register(db, { 
         email: 'middleware@example.com', 
-        password: 'password123' 
+        password: 'Password123' 
       });
       userId = user.id;
       
       const loginResult = await auth.login(db, { 
         email: 'middleware@example.com', 
-        password: 'password123' 
+        password: 'Password123' 
       });
       token = loginResult.accessToken;
     });
@@ -205,7 +266,7 @@ describe('Auth Module', () => {
     beforeEach(async () => {
       const user = await auth.register(db, { 
         email: '2fa@example.com', 
-        password: 'password123' 
+        password: 'Password123' 
       });
       userId = user.id;
     });
@@ -240,12 +301,12 @@ describe('Auth Module', () => {
     beforeEach(async () => {
       await auth.register(db, { 
         email: 'refresh@example.com', 
-        password: 'password123' 
+        password: 'Password123' 
       });
       
       await auth.login(db, { 
         email: 'refresh@example.com', 
-        password: 'password123' 
+        password: 'Password123' 
       });
       
       refreshToken = db.tokens[0].token;
@@ -272,12 +333,12 @@ describe('Auth Module', () => {
       
       await shortAuth.register(db, { 
         email: 'expired@example.com', 
-        password: 'password123' 
+        password: 'Password123' 
       });
       
       await shortAuth.login(db, { 
         email: 'expired@example.com', 
-        password: 'password123' 
+        password: 'Password123' 
       });
       
       const user = db.users.find(u => u.email === 'expired@example.com');
@@ -296,12 +357,12 @@ describe('Auth Module', () => {
     beforeEach(async () => {
       await auth.register(db, { 
         email: 'logout@example.com', 
-        password: 'password123' 
+        password: 'Password123' 
       });
       
       await auth.login(db, { 
         email: 'logout@example.com', 
-        password: 'password123' 
+        password: 'Password123' 
       });
       
       refreshToken = db.tokens[0].token;
@@ -320,7 +381,7 @@ describe('Auth Module', () => {
     it('limits login attempts', async () => {
       await auth.register(db, { 
         email: 'ratelimit@example.com', 
-        password: 'password123' 
+        password: 'Password123' 
       });
       
       let rateLimited = false;

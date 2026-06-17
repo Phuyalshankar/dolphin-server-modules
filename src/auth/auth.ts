@@ -297,6 +297,7 @@ export interface DatabaseAdapter {
   findUserByEmail(email: string): Promise<any>;
   findUserById(id: string): Promise<any>;
   updateUser(id: string, data: any): Promise<any>;
+  findUserByResetToken(token: string): Promise<any>;
   saveRefreshToken(data: RefreshTokenRecord): Promise<void>;
   findRefreshToken(token: string): Promise<RefreshTokenRecord | null>;
   deleteRefreshToken(token: string): Promise<void>;
@@ -388,21 +389,42 @@ export function createAuth(config: {
   return {
     async register(db: DatabaseAdapter, data: { email: string; password: string }) {
       if (!data.email || !data.password) throw new AuthError('Missing fields', 400);
+
+      // Password strength validation
+      if (data.password.length < 8) throw new AuthError('Password must be at least 8 characters', 400);
+      if (!/[A-Z]/.test(data.password)) throw new AuthError('Password must contain at least one uppercase letter', 400);
+      if (!/[a-z]/.test(data.password)) throw new AuthError('Password must contain at least one lowercase letter', 400);
+      if (!/[0-9]/.test(data.password)) throw new AuthError('Password must contain at least one number', 400);
+
+      // Normalize email to lowercase
+      const normalizedEmail = data.email.toLowerCase();
       
-      const user = await db.createUser({
-        email: data.email,
-        password: await hashPassword(data.password),
-        role: 'user',
-        twoFactorEnabled: false,
-        twoFactorSecret: null,
-        recoveryCodes: null,
-      });
-      
-      return { 
-        id: user.id, 
-        email: user.email, 
-        role: user.role || 'user'
-      };
+      const existing = await db.findUserByEmail(normalizedEmail);
+      if (existing) {
+        throw new AuthError('Email already registered', 400);
+      }
+
+      try {
+        const user = await db.createUser({
+          email: normalizedEmail,
+          password: await hashPassword(data.password),
+          role: 'user',
+          twoFactorEnabled: false,
+          twoFactorSecret: null,
+          recoveryCodes: null,
+        });
+        
+        return { 
+          id: user.id, 
+          email: user.email, 
+          role: user.role || 'user'
+        };
+      } catch (err: any) {
+        if (err.code === 11000 || err.message?.includes('E11000') || err.message?.includes('duplicate key')) {
+          throw new AuthError('Email already registered', 400);
+        }
+        throw err;
+      }
     },
     
     async login(
@@ -411,10 +433,11 @@ export function createAuth(config: {
       res?: { cookie: (name: string, value: string, options: any) => void }
     ) {
       const { email, password, totp, recovery } = input;
+      const normalizedEmail = email.toLowerCase();
       
-      await checkRate(`login:${email}`);
+      await checkRate(`login:${normalizedEmail}`);
       
-      const user = await db.findUserByEmail(email);
+      const user = await db.findUserByEmail(normalizedEmail);
       if (!user || !await verifyPassword(password, user?.password)) {
         throw new AuthError('Invalid credentials', 401);
       }

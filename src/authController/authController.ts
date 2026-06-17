@@ -142,6 +142,9 @@ export const createDolphinAuthController = (db: any, authConfig?: any) => {
         const { oldPassword, newPassword } = ctx.body;
         if (!oldPassword || !newPassword) throw new Error('Old and new password required');
         if (newPassword.length < 8) throw new Error('Password must be at least 8 characters');
+        if (!/[A-Z]/.test(newPassword)) throw new Error('Password must contain at least one uppercase letter');
+        if (!/[a-z]/.test(newPassword)) throw new Error('Password must contain at least one lowercase letter');
+        if (!/[0-9]/.test(newPassword)) throw new Error('Password must contain at least one number');
 
         const user = await realDb.findUserById(userId);
         if (!user) throw new Error('User not found');
@@ -162,7 +165,8 @@ export const createDolphinAuthController = (db: any, authConfig?: any) => {
         const { email } = ctx.body;
         if (!email) throw new Error('Email required');
 
-        const user = await realDb.findUserByEmail(email);
+        const normalizedEmail = email.toLowerCase();
+        const user = await realDb.findUserByEmail(normalizedEmail);
         if (!user) return { success: true, message: 'If email exists, reset link sent' };
 
         const resetToken = generateResetToken();
@@ -181,6 +185,9 @@ export const createDolphinAuthController = (db: any, authConfig?: any) => {
         const { token, newPassword } = ctx.body;
         if (!token || !newPassword) throw new Error('Token and password required');
         if (newPassword.length < 8) throw new Error('Password must be at least 8 characters');
+        if (!/[A-Z]/.test(newPassword)) throw new Error('Password must contain at least one uppercase letter');
+        if (!/[a-z]/.test(newPassword)) throw new Error('Password must contain at least one lowercase letter');
+        if (!/[0-9]/.test(newPassword)) throw new Error('Password must contain at least one number');
 
         let user = realDb.read ? (await realDb.read('User', { resetPasswordToken: token }))?.[0] : await realDb.findUserByResetToken(token);
         if (!user) throw new Error('Invalid or expired reset token');
@@ -199,7 +206,9 @@ export const createDolphinAuthController = (db: any, authConfig?: any) => {
       try {
         const { email } = ctx.body;
         if (!email) throw new Error('Email required');
-        const user = await realDb.findUserByEmail(email);
+        
+        const normalizedEmail = email.toLowerCase();
+        const user = await realDb.findUserByEmail(normalizedEmail);
         if (!user) return { success: true, message: 'If email exists, reset link sent' };
 
         const resetToken = generateResetToken();

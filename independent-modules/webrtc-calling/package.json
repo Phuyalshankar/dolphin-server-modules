@@ -1,0 +1,27 @@
+{
+  "name": "webrtc-calling",
+  "version": "1.0.0",
+  "description": "Framework-agnostic WebRTC Signaling orchestrator and TURN credentials generator for Node.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "webrtc",
+    "signaling",
+    "stun",
+    "turn",
+    "coturn"
+  ],
+  "author": "Government of Nepal Messaging Project",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.3",
+    "@types/node": "^20.11.30",
+    "@types/ws": "^8.5.10"
+  }
+}

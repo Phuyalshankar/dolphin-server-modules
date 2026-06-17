@@ -154,7 +154,7 @@ export class UniversalSignaling {
         this.handleAck(payload.data.ackId);
       }
       handler(payload as SignalingPayload);
-    }, deviceId);
+    });
   }
 }
 

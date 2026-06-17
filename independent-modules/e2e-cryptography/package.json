@@ -1,0 +1,25 @@
+{
+  "name": "e2e-cryptography",
+  "version": "1.0.0",
+  "description": "Framework-agnostic E2EE hybrid cryptography module for Node.js and Browser",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "demo": "node -r ts-node/register demo.ts"
+  },
+  "keywords": [
+    "e2ee",
+    "cryptography",
+    "ecdh",
+    "aes-gcm",
+    "security"
+  ],
+  "author": "Government of Nepal Messaging Project",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.4.3",
+    "ts-node": "^10.9.2",
+    "@types/node": "^20.11.30"
+  }
+}

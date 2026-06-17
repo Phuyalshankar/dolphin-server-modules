@@ -96,12 +96,19 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
   const adapter = {
     // ==================== AUTH METHODS ====================
     async createUser(data: any) {
-      const user = await User.create(data);
+      // Normalize email to lowercase to prevent duplicate case variations
+      const normalizedData = { 
+        ...data, 
+        email: data.email ? data.email.toLowerCase() : data.email 
+      };
+      const user = await User.create(normalizedData);
       return mapDoc(user);
     },
 
     async findUserByEmail(email: string) {
-      const user = await User.findOne({ email }).lean(leanByDefault);
+      const user = await User.findOne({ 
+        email: { $regex: new RegExp(`^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } 
+      }).lean(leanByDefault);
       return mapDoc(user);
     },
 
@@ -112,6 +119,11 @@ export function createMongooseAdapter(config: MongooseAdapterConfig) {
 
     async updateUser(id: string, data: any) {
       const user = await User.findByIdAndUpdate(id, data, { returnDocument: 'after' }).lean(leanByDefault);
+      return mapDoc(user);
+    },
+
+    async findUserByResetToken(token: string) {
+      const user = await User.findOne({ resetPasswordToken: token }).lean(leanByDefault);
       return mapDoc(user);
     },
 

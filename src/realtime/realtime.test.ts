@@ -786,4 +786,57 @@ describe('Realtime Module v2 - Tests', () => {
       expect(fn).toHaveBeenCalledWith(testPayload);
     });
   });
+
+  // ============================================
+  // Memory Leak Fixes Tests
+  // ============================================
+  describe('Memory Leak Fixes', () => {
+    it('should recursively clean up empty trie nodes when unsubscribe is called', () => {
+      const t = new TopicTrie();
+      const fn = () => {};
+      t.add('a/b/c', fn);
+      
+      // Root should have 'a'
+      expect((t as any).root.a).toBeDefined();
+      expect((t as any).root.a.b.c._).toContain(fn);
+      
+      // Remove subscription
+      t.remove('a/b/c', fn);
+      
+      // Root should no longer have 'a' because it was empty and recursively deleted
+      expect((t as any).root.a).toBeUndefined();
+    });
+
+    it('should clean up old subscriptions from the trie when a device reconnects', () => {
+      const rt = new RealtimeCore({ debug: false });
+      createdInstances.push(rt);
+      const deviceId = 'test-reconnect-leak';
+      const socket1 = new MockWebSocket();
+      const socket2 = new MockWebSocket();
+      
+      rt.register(deviceId, socket1);
+      
+      // Registering creates 2 subscriptions in the trie: phone/signaling/test-reconnect-leak and phone/signaling/all
+      const device = (rt as any).devices.get(deviceId);
+      expect(device.subscriptions.size).toBe(2);
+      
+      // Reconnect with a different socket
+      rt.register(deviceId, socket2);
+      
+      // The old socket should be closed
+      expect(socket1.closed).toBe(true);
+      
+      // The new device should be registered
+      const newDevice = (rt as any).devices.get(deviceId);
+      expect(newDevice.socket).toBe(socket2);
+      expect(newDevice.subscriptions.size).toBe(2);
+      
+      // Verify that the old subscriptions were unsubscribed from TopicTrie and no duplicate/ghost callbacks remain.
+      // If we unregister the device, the TopicTrie is 100% clean.
+      rt.unregister(deviceId);
+      
+      // Since no other device is connected, the root should not have 'phone' anymore
+      expect((rt as any).trie.root.phone).toBeUndefined();
+    });
+  });
 });

@@ -1,0 +1,26 @@
+{
+  "name": "push-notifications",
+  "version": "1.0.0",
+  "description": "Zero-dependency, framework-agnostic Push Notification service for FCM v1 and APNs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "demo": "node -r ts-node/register demo.ts"
+  },
+  "keywords": [
+    "push",
+    "notifications",
+    "fcm",
+    "apns",
+    "apple",
+    "google"
+  ],
+  "author": "Government of Nepal Messaging Project",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.4.3",
+    "ts-node": "^10.9.2",
+    "@types/node": "^20.11.30"
+  }
+}

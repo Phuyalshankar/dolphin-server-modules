@@ -7,7 +7,7 @@ const __dirname = path.dirname(__filename);
 
 export function clientHandler(ctx: any) {
   // Look for client.js relative to this server module (works both in dev and as installed package)
-  const clientPath = path.resolve(__dirname, '../../scripts/client.js');
+  const clientPath = path.resolve(__dirname, '../../scripts/client.browser.js');
   if (fs.existsSync(clientPath)) {
     const content = fs.readFileSync(clientPath, 'utf8');
     ctx.setHeader('Content-Type', 'application/javascript; charset=utf-8');

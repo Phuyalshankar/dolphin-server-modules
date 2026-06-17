@@ -180,6 +180,35 @@ describe('RtspPullerModule', () => {
       expect(cam.ingested[0].cameraId).toBe('cam1');
     });
 
+    it('should forward a newly allocated/copied buffer instead of a slice of the parent stream buffer to avoid memory leaks', () => {
+      puller.addCamera({ cameraId: 'cam1', url: 'rtsp://192.168.1.10/stream', backend: 'ffmpeg' });
+      
+      const frameData = makeMjpegFrame(64);
+      
+      // Feed a larger stream chunk containing the frame
+      const largerStreamChunk = Buffer.concat([
+        Buffer.from([0x00, 0x11, 0x22]), // prefix garbage
+        frameData,
+        Buffer.from([0x33, 0x44, 0x55])  // suffix garbage
+      ]);
+      
+      mockProc.stdout.emit('data', largerStreamChunk);
+      
+      expect(cam.ingested.length).toBe(1);
+      const ingestedFrame = cam.ingested[0].frame;
+      
+      // The ingested frame should be exactly the frameData we expect
+      expect(ingestedFrame.length).toBe(frameData.length);
+      expect(ingestedFrame[0]).toBe(0xFF);
+      expect(ingestedFrame[frameData.length - 1]).toBe(0xD9);
+      
+      // Crucially, it MUST NOT share the same memory slice (its buffer should be isolated).
+      // Since Node.js Buffers have .buffer (the underlying ArrayBuffer), if it was sliced,
+      // ingestedFrame.buffer.byteLength would equal largerStreamChunk.buffer.byteLength.
+      // If it is copied, its underlying ArrayBuffer byteLength will be exactly 64 bytes!
+      expect(ingestedFrame.buffer.byteLength).toBe(frameData.length);
+    });
+
     it('should handle partial frames across multiple chunks', () => {
       puller.addCamera({ cameraId: 'cam1', url: 'rtsp://192.168.1.10/stream', backend: 'ffmpeg' });
       const frame = makeMjpegFrame(64);

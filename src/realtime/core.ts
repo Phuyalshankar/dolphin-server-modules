@@ -201,9 +201,9 @@ export class RealtimeCore extends EventEmitter {
     }
 
     // BUG FIX #1: Use TopicTrie matching for retained messages
+    const tempTrie = new TopicTrie();
+    tempTrie.add(topic, fn);
     for (const [t, data] of this.retained.entries()) {
-      const tempTrie = new TopicTrie();
-      tempTrie.add(topic, fn);
       tempTrie.match(t, (matchedFn: Function) => matchedFn(data.payload));
     }
   }
@@ -858,13 +858,10 @@ export class RealtimeCore extends EventEmitter {
   }
 
   register(deviceId: string, socket?: any, metadata?: any) {
-    // Handle reconnection: remove old ghost connection
+    // Handle reconnection: remove old ghost connection and all its subscriptions
     if (this.devices.has(deviceId)) {
       this.log(`[Reconnect] Device ${deviceId} reconnecting, cleaning up old...`);
-      const oldDevice = this.devices.get(deviceId);
-      if (oldDevice?.socket && oldDevice.socket !== socket) {
-        try { oldDevice.socket.close(); } catch {}
-      }
+      this.unregister(deviceId);
     }
     
     this.devices.set(deviceId, { 

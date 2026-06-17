@@ -29,17 +29,28 @@ export class TopicTrie {
    */
   remove(topic: string, fn: Function) {
     const parts = topic.split('/');
-    let node = this.root;
 
-    for (const p of parts) {
-      if (!node[p]) return;
-      node = node[p];
-    }
+    const clean = (node: any, i: number): boolean => {
+      if (!node) return true;
+      if (i === parts.length) {
+        if (node._) {
+          node._ = node._.filter((f: Function) => f !== fn);
+          if (node._.length === 0) delete node._;
+        }
+        return Object.keys(node).length === 0;
+      }
 
-    if (node._) {
-      node._ = node._.filter((f: Function) => f !== fn);
-      if (node._.length === 0) delete node._;
-    }
+      const part = parts[i];
+      if (node[part]) {
+        const shouldDeleteChild = clean(node[part], i + 1);
+        if (shouldDeleteChild) {
+          delete node[part];
+        }
+      }
+      return Object.keys(node).length === 0;
+    };
+
+    clean(this.root, 0);
   }
 
   /**
