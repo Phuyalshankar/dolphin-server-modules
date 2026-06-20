@@ -122,7 +122,7 @@ describe('Realtime Module v2 - Tests', () => {
             realtime.publish(testTopic, testPayload, { retain: true, ttl: 10000 });
             realtime.subscribe(testTopic, fn);
             expect(fn).toHaveBeenCalledTimes(1);
-            expect(fn).toHaveBeenCalledWith(testPayload);
+            expect(fn).toHaveBeenCalledWith(testPayload, testTopic);
         });
     });
     // ============================================
@@ -136,7 +136,7 @@ describe('Realtime Module v2 - Tests', () => {
             realtime.subscribe(topic, fn);
             realtime.pubPush(topic, binaryData);
             expect(fn).toHaveBeenCalledTimes(1);
-            expect(fn).toHaveBeenCalledWith(binaryData);
+            expect(fn).toHaveBeenCalledWith(binaryData, topic);
         });
         it('should pull buffered data with subPull', async () => {
             const deviceId = 'test-device-001';
@@ -582,7 +582,7 @@ describe('Realtime Module v2 - Tests', () => {
             await realtime.handle(message, null, 'device-001');
             await new Promise(resolve => setTimeout(resolve, 50));
             expect(fn).toHaveBeenCalledTimes(1);
-            expect(fn).toHaveBeenCalledWith(testPayload);
+            expect(fn).toHaveBeenCalledWith(testPayload, topic);
         });
         it('should handle base64 encoded pub message', async () => {
             const fn = jest.fn();
@@ -599,7 +599,7 @@ describe('Realtime Module v2 - Tests', () => {
             await realtime.handle(Buffer.from(base64Message), null, 'device-002');
             await new Promise(resolve => setTimeout(resolve, 50));
             expect(fn).toHaveBeenCalledTimes(1);
-            expect(fn).toHaveBeenCalledWith(testPayload);
+            expect(fn).toHaveBeenCalledWith(testPayload, topic);
         });
         it('should handle hex encoded pub message', async () => {
             const fn = jest.fn();
@@ -616,7 +616,48 @@ describe('Realtime Module v2 - Tests', () => {
             await realtime.handle(Buffer.from(hexMessage), null, 'device-003');
             await new Promise(resolve => setTimeout(resolve, 50));
             expect(fn).toHaveBeenCalledTimes(1);
-            expect(fn).toHaveBeenCalledWith(testPayload);
+            expect(fn).toHaveBeenCalledWith(testPayload, topic);
+        });
+    });
+    // ============================================
+    // Memory Leak Fixes Tests
+    // ============================================
+    describe('Memory Leak Fixes', () => {
+        it('should recursively clean up empty trie nodes when unsubscribe is called', () => {
+            const t = new TopicTrie();
+            const fn = () => { };
+            t.add('a/b/c', fn);
+            // Root should have 'a'
+            expect(t.root.a).toBeDefined();
+            expect(t.root.a.b.c._).toContain(fn);
+            // Remove subscription
+            t.remove('a/b/c', fn);
+            // Root should no longer have 'a' because it was empty and recursively deleted
+            expect(t.root.a).toBeUndefined();
+        });
+        it('should clean up old subscriptions from the trie when a device reconnects', () => {
+            const rt = new RealtimeCore({ debug: false });
+            createdInstances.push(rt);
+            const deviceId = 'test-reconnect-leak';
+            const socket1 = new MockWebSocket();
+            const socket2 = new MockWebSocket();
+            rt.register(deviceId, socket1);
+            // Registering creates 2 subscriptions in the trie: phone/signaling/test-reconnect-leak and phone/signaling/all
+            const device = rt.devices.get(deviceId);
+            expect(device.subscriptions.size).toBe(2);
+            // Reconnect with a different socket
+            rt.register(deviceId, socket2);
+            // The old socket should be closed
+            expect(socket1.closed).toBe(true);
+            // The new device should be registered
+            const newDevice = rt.devices.get(deviceId);
+            expect(newDevice.socket).toBe(socket2);
+            expect(newDevice.subscriptions.size).toBe(2);
+            // Verify that the old subscriptions were unsubscribed from TopicTrie and no duplicate/ghost callbacks remain.
+            // If we unregister the device, the TopicTrie is 100% clean.
+            rt.unregister(deviceId);
+            // Since no other device is connected, the root should not have 'phone' anymore
+            expect(rt.trie.root.phone).toBeUndefined();
         });
     });
 });

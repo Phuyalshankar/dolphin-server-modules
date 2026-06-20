@@ -145,10 +145,10 @@ export class RealtimeCore extends EventEmitter {
             this.devices.get(deviceId)?.subscriptions.set(topic, fn);
         }
         // BUG FIX #1: Use TopicTrie matching for retained messages
+        const tempTrie = new TopicTrie();
+        tempTrie.add(topic, fn);
         for (const [t, data] of this.retained.entries()) {
-            const tempTrie = new TopicTrie();
-            tempTrie.add(topic, fn);
-            tempTrie.match(t, (matchedFn) => matchedFn(data.payload));
+            tempTrie.match(t, (matchedFn) => matchedFn(data.payload, t));
         }
     }
     unregister(deviceId, topic) {
@@ -190,7 +190,7 @@ export class RealtimeCore extends EventEmitter {
         if (opts.retain) {
             this.retained.set(topic, { payload, ts: Date.now(), ttl: opts.ttl || 0 });
         }
-        this.trie.match(topic, (fn) => fn(payload));
+        this.trie.match(topic, (fn) => fn(payload, topic));
         this.emit('message', { topic, payload });
         if (this.redisPub && !opts.skipRedis) {
             const jsonMessage = this.toJSON({ topic, payload });
@@ -218,7 +218,7 @@ export class RealtimeCore extends EventEmitter {
         }
         // सिधै टपिक मिल्ने सबैलाई पठाउने (Zero overhead)
         this.trie.match(topic, (fn) => {
-            fn(buffer);
+            fn(buffer, topic);
         });
         // वैकल्पिक: पछि subPull को लागि बफरमा राख्ने
         const maxBuffer = this.config.maxBufferPerTopic || this.MAX_BUFFER_SIZE;
@@ -616,9 +616,9 @@ export class RealtimeCore extends EventEmitter {
                     payload = parsed.payload;
                 }
                 else if (parsed.type === 'sub' && parsed.topic && deviceId) {
-                    this.subscribe(parsed.topic, (payload) => {
+                    this.subscribe(parsed.topic, (payload, matchedTopic) => {
                         if (socket.readyState === 1) {
-                            this.sendTo(deviceId, { topic: parsed.topic, payload });
+                            this.sendTo(deviceId, { topic: matchedTopic || parsed.topic, payload });
                         }
                     }, deviceId);
                     return;
@@ -749,16 +749,10 @@ export class RealtimeCore extends EventEmitter {
         this.plugins.set(plugin.name, plugin);
     }
     register(deviceId, socket, metadata) {
-        // Handle reconnection: remove old ghost connection
+        // Handle reconnection: remove old ghost connection and all its subscriptions
         if (this.devices.has(deviceId)) {
             this.log(`[Reconnect] Device ${deviceId} reconnecting, cleaning up old...`);
-            const oldDevice = this.devices.get(deviceId);
-            if (oldDevice?.socket && oldDevice.socket !== socket) {
-                try {
-                    oldDevice.socket.close();
-                }
-                catch { }
-            }
+            this.unregister(deviceId);
         }
         this.devices.set(deviceId, {
             lastSeen: Date.now(),

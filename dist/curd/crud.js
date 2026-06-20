@@ -92,6 +92,21 @@ export function createCRUD(db, options = {}) {
             for (const k of keys) {
                 const av = a[k];
                 const bv = b[k];
+                // Handle null/undefined values
+                if (av == null && bv == null)
+                    continue;
+                if (av == null)
+                    return sort[k] === 'asc' ? -1 : 1;
+                if (bv == null)
+                    return sort[k] === 'asc' ? 1 : -1;
+                // Handle different types
+                if (typeof av !== typeof bv) {
+                    // Treat numbers < strings < booleans < objects for consistency
+                    const typeOrder = ['number', 'string', 'boolean', 'object'];
+                    const at = typeOrder.indexOf(typeof av);
+                    const bt = typeOrder.indexOf(typeof bv);
+                    return sort[k] === 'asc' ? (at - bt) : (bt - at);
+                }
                 if (av === bv)
                     continue;
                 return sort[k] === 'asc' ? (av > bv ? 1 : -1) : (av > bv ? -1 : 1);
@@ -130,7 +145,7 @@ export function createCRUD(db, options = {}) {
             let items = [];
             const finalFilter = fixId(withOwnership(filter, userId));
             if (db.advancedRead) {
-                items = await db.advancedRead(collection, finalFilter, options);
+                items = filterDeleted(await db.advancedRead(collection, finalFilter, options));
             }
             else {
                 const raw = await db.read(collection, {});

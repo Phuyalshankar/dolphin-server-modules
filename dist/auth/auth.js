@@ -310,24 +310,48 @@ export function createAuth(config) {
         async register(db, data) {
             if (!data.email || !data.password)
                 throw new AuthError('Missing fields', 400);
-            const user = await db.createUser({
-                email: data.email,
-                password: await hashPassword(data.password),
-                role: 'user',
-                twoFactorEnabled: false,
-                twoFactorSecret: null,
-                recoveryCodes: null,
-            });
-            return {
-                id: user.id,
-                email: user.email,
-                role: user.role || 'user'
-            };
+            // Password strength validation
+            if (data.password.length < 8)
+                throw new AuthError('Password must be at least 8 characters', 400);
+            if (!/[A-Z]/.test(data.password))
+                throw new AuthError('Password must contain at least one uppercase letter', 400);
+            if (!/[a-z]/.test(data.password))
+                throw new AuthError('Password must contain at least one lowercase letter', 400);
+            if (!/[0-9]/.test(data.password))
+                throw new AuthError('Password must contain at least one number', 400);
+            // Normalize email to lowercase
+            const normalizedEmail = data.email.toLowerCase();
+            const existing = await db.findUserByEmail(normalizedEmail);
+            if (existing) {
+                throw new AuthError('Email already registered', 400);
+            }
+            try {
+                const user = await db.createUser({
+                    email: normalizedEmail,
+                    password: await hashPassword(data.password),
+                    role: 'user',
+                    twoFactorEnabled: false,
+                    twoFactorSecret: null,
+                    recoveryCodes: null,
+                });
+                return {
+                    id: user.id,
+                    email: user.email,
+                    role: user.role || 'user'
+                };
+            }
+            catch (err) {
+                if (err.code === 11000 || err.message?.includes('E11000') || err.message?.includes('duplicate key')) {
+                    throw new AuthError('Email already registered', 400);
+                }
+                throw err;
+            }
         },
         async login(db, input, res) {
             const { email, password, totp, recovery } = input;
-            await checkRate(`login:${email}`);
-            const user = await db.findUserByEmail(email);
+            const normalizedEmail = email.toLowerCase();
+            await checkRate(`login:${normalizedEmail}`);
+            const user = await db.findUserByEmail(normalizedEmail);
             if (!user || !await verifyPassword(password, user?.password)) {
                 throw new AuthError('Invalid credentials', 401);
             }
@@ -534,54 +558,98 @@ export function createAuth(config) {
             await db.updateUser(userId, { recoveryCodes: hashedCodes });
             return { recoveryCodes: codes };
         },
-        // ✅ FIXED: Dolphin Server compatible middleware
+        // ✅ FIXED: Supports both Dolphin Server (ctx, resolve) and Express (req, res, next) middleware signatures
         middleware(opts = {}) {
-            return async (req, res, next) => {
+            return async (arg1, arg2, arg3) => {
+                let req;
+                let res;
+                let next;
                 try {
-                    // ✅ Safe headers access
-                    const headers = req?.headers || req?.req?.headers || {};
-                    const authHeader = headers?.authorization;
-                    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-                        if (res && typeof res.status === 'function') {
-                            return res.status(401).json({ message: 'Unauthorized' });
+                    // Detect signature: if arg2 is a function and arg3 is undefined, it's Dolphin Server style (ctx, resolve)
+                    if (typeof arg2 === 'function' && !arg3) {
+                        const ctx = arg1;
+                        req = ctx.req;
+                        res = ctx.res;
+                        next = arg2;
+                        const headers = req?.headers || {};
+                        const authHeader = headers?.authorization;
+                        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+                            ctx.status(401).json({ message: 'Unauthorized' });
+                            return;
                         }
-                        const err = new Error('Unauthorized');
-                        err.status = 401;
-                        throw err;
+                        const token = authHeader.substring(7);
+                        let decoded;
+                        try {
+                            decoded = await verifyJWT(token, config.secret);
+                        }
+                        catch (jwtErr) {
+                            ctx.status(401).json({ message: 'Unauthorized' });
+                            return;
+                        }
+                        ctx.user = decoded;
+                        if (ctx.req)
+                            ctx.req.user = decoded;
+                        if (opts.require2FA && decoded.twoFactorVerified !== true) {
+                            ctx.status(403).json({ message: '2FA required' });
+                            return;
+                        }
+                        if (next && typeof next === 'function') {
+                            next();
+                        }
                     }
-                    const token = authHeader.substring(7);
-                    let decoded;
-                    try {
-                        decoded = await verifyJWT(token, config.secret);
+                    else {
+                        // Express style (req, res, next)
+                        req = arg1;
+                        res = arg2;
+                        next = arg3;
+                        const headers = req?.headers || {};
+                        const authHeader = headers?.authorization;
+                        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+                            if (res && typeof res.status === 'function') {
+                                return res.status(401).json({ message: 'Unauthorized' });
+                            }
+                            const err = new Error('Unauthorized');
+                            err.status = 401;
+                            throw err;
+                        }
+                        const token = authHeader.substring(7);
+                        let decoded;
+                        try {
+                            decoded = await verifyJWT(token, config.secret);
+                        }
+                        catch (jwtErr) {
+                            if (res && typeof res.status === 'function') {
+                                return res.status(401).json({ message: 'Unauthorized' });
+                            }
+                            const err = new Error('Unauthorized');
+                            err.status = 401;
+                            throw err;
+                        }
                         req.user = decoded;
-                    }
-                    catch (jwtErr) {
-                        if (res && typeof res.status === 'function') {
-                            return res.status(401).json({ message: 'Unauthorized' });
+                        if (opts.require2FA && decoded.twoFactorVerified !== true) {
+                            if (res && typeof res.status === 'function') {
+                                return res.status(403).json({ message: '2FA required' });
+                            }
+                            const err = new Error('2FA required');
+                            err.status = 403;
+                            throw err;
                         }
-                        const err = new Error('Unauthorized');
-                        err.status = 401;
-                        throw err;
-                    }
-                    if (opts.require2FA && decoded.twoFactorVerified !== true) {
-                        if (res && typeof res.status === 'function') {
-                            return res.status(403).json({ message: '2FA required' });
+                        if (next && typeof next === 'function') {
+                            next();
                         }
-                        const err = new Error('2FA required');
-                        err.status = 403;
-                        throw err;
                     }
-                    // ✅ Fixed: Check if next exists and is a function
-                    if (next && typeof next === 'function') {
-                        next();
-                    }
-                    // For Dolphin Server, if next is not a function, just return
                 }
                 catch (err) {
-                    if (res && typeof res.status === 'function') {
-                        return res.status(err.status || 401).json({ message: err.message });
+                    // If Dolphin Server style
+                    if (typeof arg2 === 'function' && !arg3) {
+                        arg1.status(401).json({ message: 'Unauthorized' });
                     }
-                    throw err;
+                    else {
+                        if (res && typeof res.status === 'function') {
+                            return res.status(err.status || 401).json({ message: err.message });
+                        }
+                        throw err;
+                    }
                 }
             };
         },

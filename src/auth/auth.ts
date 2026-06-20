@@ -682,58 +682,102 @@ export function createAuth(config: {
       return { recoveryCodes: codes };
     },
     
-    // ✅ FIXED: Dolphin Server compatible middleware
+    // ✅ FIXED: Supports both Dolphin Server (ctx, resolve) and Express (req, res, next) middleware signatures
     middleware(opts: { require2FA?: boolean } = {}) {
-      return async (req: any, res: any, next?: Function) => {
+      return async (arg1: any, arg2: any, arg3?: Function) => {
+        let req: any;
+        let res: any;
+        let next: Function | undefined;
         try {
-          // ✅ Safe headers access
-          const headers = req?.headers || req?.req?.headers || {};
-          const authHeader = headers?.authorization;
-          
-          if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            if (res && typeof res.status === 'function') {
-              return res.status(401).json({ message: 'Unauthorized' });
-            }
-            const err: any = new Error('Unauthorized');
-            err.status = 401;
-            throw err;
-          }
+          // Detect signature: if arg2 is a function and arg3 is undefined, it's Dolphin Server style (ctx, resolve)
+          if (typeof arg2 === 'function' && !arg3) {
+            const ctx = arg1;
+            req = ctx.req;
+            res = ctx.res;
+            next = arg2;
 
-          const token = authHeader.substring(7);
-          let decoded;
-          
-          try {
-            decoded = await verifyJWT(token, config.secret);
+            const headers = req?.headers || {};
+            const authHeader = headers?.authorization;
+            if (!authHeader || !authHeader.startsWith('Bearer ')) {
+              ctx.status(401).json({ message: 'Unauthorized' });
+              return;
+            }
+
+            const token = authHeader.substring(7);
+            let decoded;
+            try {
+              decoded = await verifyJWT(token, config.secret);
+            } catch (jwtErr) {
+              ctx.status(401).json({ message: 'Unauthorized' });
+              return;
+            }
+
+            ctx.user = decoded;
+            if (ctx.req) ctx.req.user = decoded;
+
+            if (opts.require2FA && decoded.twoFactorVerified !== true) {
+              ctx.status(403).json({ message: '2FA required' });
+              return;
+            }
+
+            if (next && typeof next === 'function') {
+              next();
+            }
+          } else {
+            // Express style (req, res, next)
+            req = arg1;
+            res = arg2;
+            next = arg3;
+
+            const headers = req?.headers || {};
+            const authHeader = headers?.authorization;
+            if (!authHeader || !authHeader.startsWith('Bearer ')) {
+              if (res && typeof res.status === 'function') {
+                return res.status(401).json({ message: 'Unauthorized' });
+              }
+              const err: any = new Error('Unauthorized');
+              err.status = 401;
+              throw err;
+            }
+
+            const token = authHeader.substring(7);
+            let decoded;
+            try {
+              decoded = await verifyJWT(token, config.secret);
+            } catch (jwtErr) {
+              if (res && typeof res.status === 'function') {
+                return res.status(401).json({ message: 'Unauthorized' });
+              }
+              const err: any = new Error('Unauthorized');
+              err.status = 401;
+              throw err;
+            }
+
             req.user = decoded;
-          } catch (jwtErr) {
-            if (res && typeof res.status === 'function') {
-              return res.status(401).json({ message: 'Unauthorized' });
-            }
-            const err: any = new Error('Unauthorized');
-            err.status = 401;
-            throw err;
-          }
 
-          if (opts.require2FA && decoded.twoFactorVerified !== true) {
-            if (res && typeof res.status === 'function') {
-              return res.status(403).json({ message: '2FA required' });
+            if (opts.require2FA && decoded.twoFactorVerified !== true) {
+              if (res && typeof res.status === 'function') {
+                return res.status(403).json({ message: '2FA required' });
+              }
+              const err: any = new Error('2FA required');
+              err.status = 403;
+              throw err;
             }
-            const err: any = new Error('2FA required');
-            err.status = 403;
-            throw err;
-          }
 
-          // ✅ Fixed: Check if next exists and is a function
-          if (next && typeof next === 'function') {
-            next();
+            if (next && typeof next === 'function') {
+              next();
+            }
           }
-          // For Dolphin Server, if next is not a function, just return
-          
         } catch (err: any) {
-          if (res && typeof res.status === 'function') {
-            return res.status(err.status || 401).json({ message: err.message });
+          // If Dolphin Server style
+          if (typeof arg2 === 'function' && !arg3) {
+            arg1.status(401).json({ message: 'Unauthorized' });
+          } else {
+            if (res && typeof res.status === 'function') {
+              return res.status(err.status || 401).json({ message: err.message });
+            }
+            throw err;
           }
-          throw err;
         }
       };
     },

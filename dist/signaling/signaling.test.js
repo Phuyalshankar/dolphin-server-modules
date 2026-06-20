@@ -108,5 +108,31 @@ describe('Signaling Module - Final Tests', () => {
         });
         sig2.sendTelemetry(deviceId, 'all', { v: 100 });
     });
+    it('should persist signaling handlers across device reconnection', async () => {
+        const callerId = 'caller-reconnect';
+        const receiverId = 'receiver-reconnect';
+        const receiverSocket1 = new MockWebSocket();
+        const receiverSocket2 = new MockWebSocket();
+        const callerSocket = new MockWebSocket();
+        rt.register(receiverId, receiverSocket1);
+        rt.register(callerId, callerSocket);
+        // Caller is listening to receive the ACK
+        signaling.onSignalFor(callerId, () => { });
+        // Receiver auto-ACKs
+        signaling.onSignalFor(receiverId, (payload) => {
+            if (payload.type === SignalType.INVITE) {
+                signaling.ack(receiverId, callerId, payload.msgId);
+            }
+        });
+        // Simulate receiver reconnection: registers a new socket
+        rt.register(receiverId, receiverSocket2);
+        // Old socket is closed
+        expect(receiverSocket1.closed).toBe(true);
+        // Caller sends invite and waits for ACK
+        // Since signaling handler persists, receiver should still receive it on the new socket
+        // and successfully auto-ACK, resolving caller's invite Promise to true!
+        const ackReceived = await signaling.invite(callerId, receiverId, { sdp: 'test-sdp-reconnect' });
+        expect(ackReceived).toBe(true);
+    });
 });
 //# sourceMappingURL=signaling.test.js.map

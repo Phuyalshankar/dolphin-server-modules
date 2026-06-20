@@ -188,7 +188,7 @@ export class RealtimeCore extends EventEmitter {
     }
   }
 
-  subscribe(topic: string, fn: (data: any) => void, deviceId?: string) {
+  subscribe(topic: string, fn: (data: any, matchedTopic?: string) => void, deviceId?: string) {
     if (deviceId && this.config.acl && !this.config.acl.canSubscribe(deviceId, topic)) {
       throw new Error('ACL deny');
     }
@@ -204,7 +204,7 @@ export class RealtimeCore extends EventEmitter {
     const tempTrie = new TopicTrie();
     tempTrie.add(topic, fn);
     for (const [t, data] of this.retained.entries()) {
-      tempTrie.match(t, (matchedFn: Function) => matchedFn(data.payload));
+      tempTrie.match(t, (matchedFn: Function) => matchedFn(data.payload, t));
     }
   }
 
@@ -247,7 +247,7 @@ export class RealtimeCore extends EventEmitter {
       this.retained.set(topic, { payload, ts: Date.now(), ttl: opts.ttl || 0 });
     }
 
-    this.trie.match(topic, (fn) => fn(payload));
+    this.trie.match(topic, (fn) => fn(payload, topic));
     this.emit('message', { topic, payload });
 
     if (this.redisPub && !opts.skipRedis) {
@@ -279,7 +279,7 @@ export class RealtimeCore extends EventEmitter {
     
     // सिधै टपिक मिल्ने सबैलाई पठाउने (Zero overhead)
     this.trie.match(topic, (fn) => {
-      fn(buffer);
+      fn(buffer, topic);
     });
     
     // वैकल्पिक: पछि subPull को लागि बफरमा राख्ने
@@ -732,9 +732,9 @@ export class RealtimeCore extends EventEmitter {
           topic = parsed.topic;
           payload = parsed.payload;
         } else if (parsed.type === 'sub' && parsed.topic && deviceId) {
-          this.subscribe(parsed.topic, (payload) => {
+          this.subscribe(parsed.topic, (payload, matchedTopic) => {
             if (socket.readyState === 1) {
-              this.sendTo(deviceId, { topic: parsed.topic, payload });
+              this.sendTo(deviceId, { topic: matchedTopic || parsed.topic, payload });
             }
           }, deviceId);
           return;

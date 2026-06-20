@@ -9,6 +9,7 @@ export interface DatabaseAdapter {
     findUserByEmail(email: string): Promise<any>;
     findUserById(id: string): Promise<any>;
     updateUser(id: string, data: any): Promise<any>;
+    findUserByResetToken(token: string): Promise<any>;
     saveRefreshToken(data: RefreshTokenRecord): Promise<void>;
     findRefreshToken(token: string): Promise<RefreshTokenRecord | null>;
     deleteRefreshToken(token: string): Promise<void>;
@@ -77,6 +78,6 @@ export declare function createAuth(config: {
     }>;
     middleware(opts?: {
         require2FA?: boolean;
-    }): (req: any, res: any, next?: Function) => Promise<any>;
+    }): (arg1: any, arg2: any, arg3?: Function) => Promise<any>;
     verifyToken: (token: string) => Promise<any>;
 };

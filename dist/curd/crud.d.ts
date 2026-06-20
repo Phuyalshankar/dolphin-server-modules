@@ -3,6 +3,7 @@ export interface DatabaseAdapter {
     findUserByEmail(email: string): Promise<any>;
     findUserById(id: string): Promise<any>;
     updateUser(id: string, data: any): Promise<any>;
+    findUserByResetToken(token: string): Promise<any>;
     saveRefreshToken(data: any): Promise<void>;
     findRefreshToken(token: string): Promise<any>;
     deleteRefreshToken(token: string): Promise<void>;

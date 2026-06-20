@@ -144,7 +144,7 @@ describe('Realtime Module v2 - Tests', () => {
       realtime.subscribe(testTopic, fn);
       
       expect(fn).toHaveBeenCalledTimes(1);
-      expect(fn).toHaveBeenCalledWith(testPayload);
+      expect(fn).toHaveBeenCalledWith(testPayload, testTopic);
     });
   });
 
@@ -161,7 +161,7 @@ describe('Realtime Module v2 - Tests', () => {
       realtime.pubPush(topic, binaryData);
       
       expect(fn).toHaveBeenCalledTimes(1);
-      expect(fn).toHaveBeenCalledWith(binaryData);
+      expect(fn).toHaveBeenCalledWith(binaryData, topic);
     });
 
     it('should pull buffered data with subPull', async () => {
@@ -739,7 +739,7 @@ describe('Realtime Module v2 - Tests', () => {
       await new Promise(resolve => setTimeout(resolve, 50));
       
       expect(fn).toHaveBeenCalledTimes(1);
-      expect(fn).toHaveBeenCalledWith(testPayload);
+      expect(fn).toHaveBeenCalledWith(testPayload, topic);
     });
 
     it('should handle base64 encoded pub message', async () => {
@@ -761,7 +761,7 @@ describe('Realtime Module v2 - Tests', () => {
       await new Promise(resolve => setTimeout(resolve, 50));
       
       expect(fn).toHaveBeenCalledTimes(1);
-      expect(fn).toHaveBeenCalledWith(testPayload);
+      expect(fn).toHaveBeenCalledWith(testPayload, topic);
     });
 
     it('should handle hex encoded pub message', async () => {
@@ -783,7 +783,7 @@ describe('Realtime Module v2 - Tests', () => {
       await new Promise(resolve => setTimeout(resolve, 50));
       
       expect(fn).toHaveBeenCalledTimes(1);
-      expect(fn).toHaveBeenCalledWith(testPayload);
+      expect(fn).toHaveBeenCalledWith(testPayload, topic);
     });
   });
 

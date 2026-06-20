@@ -1,6 +1,6 @@
 {
   "name": "dolphin-server-modules",
-  "version": "2.14.0",
+  "version": "2.14.1",
   "type": "module",
   "homepage": "https://github.com/Phuyalshankar/dolphin-server-modules#readme",
   "description": "Core utility modules for Auth, CRUD, and Controllers",
@@ -20,9 +20,12 @@
     "scripts/client.mjs",
     "scripts/client.browser.js",
     "scripts/dolphin-persist.js",
-    "independent-modules/e2e-cryptography",
-    "independent-modules/push-notifications",
-    "independent-modules/webrtc-calling"
+    "independent-modules/e2e-cryptography/**",
+    "!independent-modules/e2e-cryptography/node_modules/**",
+    "independent-modules/push-notifications/**",
+    "!independent-modules/push-notifications/node_modules/**",
+    "independent-modules/webrtc-calling/**",
+    "!independent-modules/webrtc-calling/node_modules/**"
   ],
   "exports": {
     ".": {

@@ -60,6 +60,7 @@ class TestAdapter {
     async findUserByEmail() { return null; }
     async findUserById() { return null; }
     async updateUser() { return {}; }
+    async findUserByResetToken() { return null; }
     async saveRefreshToken() { }
     async findRefreshToken() { return null; }
     async deleteRefreshToken() { }

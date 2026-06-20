@@ -214,7 +214,7 @@ export const ${name} = mongoose.model('${name}', ${name.toLowerCase()}Schema);
 
 const userSchema = new mongoose.Schema(
   {
-    email:           { type: String, required: true, unique: true, lowercase: true, trim: true },
+    email:           { type: String, required: true, lowercase: true, trim: true },
     password:        { type: String, required: true },
     role:            { type: String, enum: ['user','admin','moderator'], default: 'user' },
     twoFactorEnabled:  { type: Boolean, default: false },
@@ -223,10 +223,13 @@ const userSchema = new mongoose.Schema(
     recoveryCodes:     { type: [String], default: [] },
     isActive:          { type: Boolean, default: true },
     lastLoginAt:       { type: Date, default: null },
+    // 🔑 Password reset fields — forgotPassword/resetPassword को लागि अनिवार्य
+    resetPasswordToken:   { type: String, default: null },
+    resetPasswordExpires: { type: Date, default: null },
   },
   { timestamps: true, versionKey: false }
 );
-userSchema.index({ email: 1 });
+userSchema.index({ email: 1 }, { unique: true });
 export const User = mongoose.model('User', userSchema);
 
 const refreshTokenSchema = new mongoose.Schema(

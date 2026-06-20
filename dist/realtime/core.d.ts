@@ -59,7 +59,7 @@ export declare class RealtimeCore extends EventEmitter {
     private cleanJSONCache;
     private cleanupBuffers;
     private initRedis;
-    subscribe(topic: string, fn: (data: any) => void, deviceId?: string): void;
+    subscribe(topic: string, fn: (data: any, matchedTopic?: string) => void, deviceId?: string): void;
     unregister(deviceId: string, topic?: string): void;
     publish(topic: string, payload: any, opts?: {
         retain?: boolean;

@@ -27,17 +27,27 @@ export class TopicTrie {
      */
     remove(topic, fn) {
         const parts = topic.split('/');
-        let node = this.root;
-        for (const p of parts) {
-            if (!node[p])
-                return;
-            node = node[p];
-        }
-        if (node._) {
-            node._ = node._.filter((f) => f !== fn);
-            if (node._.length === 0)
-                delete node._;
-        }
+        const clean = (node, i) => {
+            if (!node)
+                return true;
+            if (i === parts.length) {
+                if (node._) {
+                    node._ = node._.filter((f) => f !== fn);
+                    if (node._.length === 0)
+                        delete node._;
+                }
+                return Object.keys(node).length === 0;
+            }
+            const part = parts[i];
+            if (node[part]) {
+                const shouldDeleteChild = clean(node[part], i + 1);
+                if (shouldDeleteChild) {
+                    delete node[part];
+                }
+            }
+            return Object.keys(node).length === 0;
+        };
+        clean(this.root, 0);
     }
     /**
      * Match a topic and execute callback for each matching subscriber.

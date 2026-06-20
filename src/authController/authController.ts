@@ -32,6 +32,22 @@ export const createDolphinAuthController = (db: any, authConfig?: any) => {
     secureCookies: realConfig?.secureCookies ?? false
   });
 
+  if (realConfig?.realtime) {
+    const rt = realConfig.realtime;
+    rt.subscribe('validation/auth', async (payload: any) => {
+      const { name, value, deviceId } = payload;
+      if (!deviceId) return;
+
+      const schema = realConfig?.schemas?.register || realConfig?.schemas?.auth;
+      const errorMsg = await (authCore as any).validateField(realDb, name, value, schema);
+
+      rt.sendTo(deviceId, {
+        topic: `errors/${name}`,
+        payload: errorMsg
+      });
+    });
+  }
+
   const verifyPassword = async (password: string, hash: string) => {
     try {
       const argon2 = await import('argon2');

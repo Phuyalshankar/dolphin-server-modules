@@ -151,10 +151,12 @@ export function createDolphinServer(options: { port?: number; host?: string, rea
             try {
               // If it's a middleware (takes ctx and next)
               if (handler.length >= 2) {
-                result = await handler(ctx, resolve);
+                const r = await handler(ctx, resolve);
+                if (r !== undefined) result = r;
               } else {
                 // If it's a regular handler
-                result = await handler(ctx);
+                const r = await handler(ctx);
+                if (r !== undefined) result = r;
                 resolve();
               }
             } catch (err) {

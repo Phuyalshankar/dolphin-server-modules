@@ -122,7 +122,7 @@ export class UniversalSignaling {
                 this.handleAck(payload.data.ackId);
             }
             handler(payload);
-        }, deviceId);
+        });
     }
 }
 export function createSignaling(rt) {
