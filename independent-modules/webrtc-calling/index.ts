@@ -29,11 +29,13 @@ export function generateTurnCredentials(
 }
 
 export interface SignalingMessage {
-  type: 'join' | 'leave' | 'signal';
+  type: 'join' | 'leave' | 'signal' | 'sub' | 'unsub' | 'pub' | 'HEARTBEAT' | 'HEARTBEAT_ACK';
   room?: string;
   to?: string; // target peer ID
   from?: string; // sender peer ID (injected by server)
   data?: any; // SDP offer/answer or ICE candidate
+  topic?: string;
+  payload?: any;
 }
 
 /**
@@ -47,6 +49,8 @@ export class WebRTCSignalingOrchestrator {
   private rooms = new Map<string, Set<string>>();
   // Reverse lookup: peerId -> roomId
   private peerRooms = new Map<string, string>();
+  // Map of subscriptions: topic -> Set<peerId>
+  private subscriptions = new Map<string, Set<string>>();
 
   /**
    * Handle an incoming connection from a peer.
@@ -68,17 +72,25 @@ export class WebRTCSignalingOrchestrator {
     });
 
     ws.on('close', () => {
-      this.handleDisconnect(peerId);
+      if (this.peers.get(peerId) === ws) {
+        this.handleDisconnect(peerId);
+      }
     });
 
     ws.on('error', (err) => {
       console.error(`[Signaling Client Error] Peer ${peerId}:`, err);
-      this.handleDisconnect(peerId);
+      if (this.peers.get(peerId) === ws) {
+        this.handleDisconnect(peerId);
+      }
     });
   }
 
   private processMessage(senderId: string, msg: SignalingMessage) {
     switch (msg.type) {
+      case 'HEARTBEAT':
+        this.sendToPeer(senderId, { type: 'HEARTBEAT_ACK' });
+        break;
+
       case 'join':
         if (!msg.room) {
           this.sendToPeer(senderId, { type: 'error', message: 'Room ID is required to join' });
@@ -104,8 +116,61 @@ export class WebRTCSignalingOrchestrator {
         });
         break;
 
+      case 'sub':
+        if (!msg.topic) {
+          this.sendToPeer(senderId, { type: 'error', message: 'Topic is required to subscribe' });
+          return;
+        }
+        this.subscribeTopic(senderId, msg.topic);
+        break;
+
+      case 'unsub':
+        if (!msg.topic) {
+          this.sendToPeer(senderId, { type: 'error', message: 'Topic is required to unsubscribe' });
+          return;
+        }
+        this.unsubscribeTopic(senderId, msg.topic);
+        break;
+
+      case 'pub':
+        if (!msg.topic) {
+          this.sendToPeer(senderId, { type: 'error', message: 'Topic is required to publish' });
+          return;
+        }
+        this.publishTopic(senderId, msg.topic, msg.payload);
+        break;
+
       default:
         this.sendToPeer(senderId, { type: 'error', message: `Unknown signal type: ${msg.type}` });
+    }
+  }
+
+  private subscribeTopic(peerId: string, topic: string) {
+    if (!this.subscriptions.has(topic)) {
+      this.subscriptions.set(topic, new Set());
+    }
+    this.subscriptions.get(topic)!.add(peerId);
+  }
+
+  private unsubscribeTopic(peerId: string, topic: string) {
+    const subs = this.subscriptions.get(topic);
+    if (subs) {
+      subs.delete(peerId);
+      if (subs.size === 0) {
+        this.subscriptions.delete(topic);
+      }
+    }
+  }
+
+  private publishTopic(senderId: string, topic: string, payload: any) {
+    const subs = this.subscriptions.get(topic);
+    if (subs) {
+      subs.forEach(peerId => {
+        this.sendToPeer(peerId, {
+          topic,
+          payload
+        });
+      });
     }
   }
 
@@ -165,6 +230,16 @@ export class WebRTCSignalingOrchestrator {
   private handleDisconnect(peerId: string) {
     this.leaveRoom(peerId);
     this.peers.delete(peerId);
+    
+    // Clean up all subscriptions for this peer
+    this.subscriptions.forEach((subs, topic) => {
+      if (subs.has(peerId)) {
+        subs.delete(peerId);
+        if (subs.size === 0) {
+          this.subscriptions.delete(topic);
+        }
+      }
+    });
   }
 
   private sendToPeer(peerId: string, payload: any) {

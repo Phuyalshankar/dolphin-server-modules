@@ -101,10 +101,13 @@ export function createDolphinServer(options = {}) {
                 const chunks = [];
                 for await (const chunk of req)
                     chunks.push(chunk);
-                const rawBody = Buffer.concat(chunks).toString();
+                // BUG FIX (2026-06-29): Keep raw Buffer — do NOT call .toString() before branching.
+                // Previous code did Buffer.concat(chunks).toString() unconditionally, which corrupted
+                // binary bodies (e.g. application/octet-stream PCM audio) into garbled strings.
+                const rawBodyBuffer = Buffer.concat(chunks);
                 if (contentType.includes('application/json')) {
                     try {
-                        const parsed = JSON.parse(rawBody);
+                        const parsed = JSON.parse(rawBodyBuffer.toString());
                         ctx.body = parsed;
                         req.body = parsed;
                     }
@@ -114,13 +117,18 @@ export function createDolphinServer(options = {}) {
                     }
                 }
                 else if (contentType.includes('application/x-www-form-urlencoded')) {
-                    const parsed = Object.fromEntries(new URLSearchParams(rawBody));
+                    const parsed = Object.fromEntries(new URLSearchParams(rawBodyBuffer.toString()));
                     ctx.body = parsed;
                     req.body = parsed;
                 }
+                else if (contentType.includes('application/octet-stream')) {
+                    // Preserve raw Buffer for binary data (PCM audio, file uploads, etc.)
+                    ctx.body = rawBodyBuffer;
+                    req.body = rawBodyBuffer;
+                }
                 else {
-                    ctx.body = rawBody;
-                    req.body = rawBody;
+                    ctx.body = rawBodyBuffer.toString();
+                    req.body = rawBodyBuffer.toString();
                 }
             }
         }
