@@ -212,8 +212,75 @@ npx dolphin help
 | `dolphin connect redis [uri]` | Test Redis connection |
 | `dolphin status` | Show project health |
 | `dolphin deploy` | PM2 deployment guide |
+| `dolphin generate-client --url --out --key` | Generate typed JS SDK + `.d.ts` from server |
 | `dolphin generate "prompt"` | AI code generation |
 | `dolphin chat` | AI agent (Cursor mode) |
+
+---
+
+## ⚡ Reactive Routes (HTTP-to-RT Auto-broadcasting)
+
+Dolphin automatically broadcasts realtime events to all connected clients whenever a `POST`, `PUT`, `PATCH`, or `DELETE` request succeeds — **zero extra code needed**.
+
+```js
+// ब्याकइन्डमा केवल साधारण HTTP रुट लेख्नुहोस् — बाँकी Dolphin ले मिलाउँछ!
+const rt = new RealtimeCore();
+const app = createDolphinServer({ realtime: rt });
+
+app.use('/api/todos', createCrudRouter(db, 'Todo'));
+// 👆 POST/PUT/DELETE मा स्वतः 'todos' टपिकमा रियलटाइम ब्रोडकास्ट हुन्छ!
+```
+
+**क्लाइन्टमा (Frontend):**
+```js
+client.connectRealtime((msg) => {
+  console.log(msg.action, msg.data); // 'create', { title: '...' }
+}, ['todos']); // केवल 'todos' टपिक सुन्ने
+```
+
+**नियन्त्रण (Control):**
+```js
+// ग्लोबल्ली बन्द गर्न:
+createDolphinServer({ realtime: rt, autoReactive: false });
+
+// व्यक्तिगत रुटमा बन्द गर्न:
+app.post('/api/change-password', (ctx) => {
+  ctx.state.noReactive = true; // यो रुटमा ब्रोडकास्ट हुँदैन
+  return { success: true };
+});
+```
+
+---
+
+## 🧩 Auto-Generated Client SDK (.js + .d.ts)
+
+Dolphin automatically generates a typed JavaScript SDK and TypeScript declarations from your backend routes.
+
+```bash
+npx dolphin generate-client \
+  --url=http://localhost:4000 \
+  --out=./src/dolphin-client.js \
+  --key=your_secret_generation_key
+```
+
+This creates **two files**:
+- `dolphin-client.js` — SDK with full API client
+- `dolphin-client.d.ts` — TypeScript autocomplete typings
+
+**React मा प्रयोग:**
+```ts
+import { client } from './dolphin-client.js';
+
+// Full TypeScript autocomplete!
+const todos = await client.api.todos.get();
+await client.api.todos.post({ title: 'New Task' });
+```
+
+**Secure your generator endpoint:**
+```env
+DOLPHIN_GENERATE_KEY=your_secret_generation_key
+JWT_SECRET=your_jwt_secret
+```
 
 ---
 
@@ -224,6 +291,7 @@ NODE_ENV=development
 PORT=3000
 MONGO_URI=mongodb://localhost:27017/dolphin_db
 JWT_SECRET=your_ultra_secret_key_minimum_32_chars
+DOLPHIN_GENERATE_KEY=your_sdk_generation_secret_key
 # Optional:
 REDIS_URL=redis://localhost:6379
 ENCRYPTION_KEY=your_encryption_key_for_2fa

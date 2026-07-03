@@ -1139,10 +1139,90 @@ pm2 logs dolphin-iot-backend
 âœ… pubPush/subPull à¤¸à¤à¤— à¤¹à¤¾à¤ˆ-à¤«à¥à¤°à¤¿à¤•à¥à¤µà¥‡à¤¨à¥à¤¸à¥€ à¤¡à¤¾à¤Ÿà¤¾ à¤¹à¥à¤¯à¤¾à¤¨à¥à¤¡à¤² à¤—à¤°à¥à¤¨
 âœ… pubFile/subFile à¤¸à¤à¤— à¤ à¥‚à¤²à¤¾ à¤«à¤¾à¤‡à¤²à¤¹à¤°à¥‚ à¤°à¤¿à¤œà¥à¤¯à¥à¤® à¤¸à¤ªà¥‹à¤°à¥à¤Ÿ à¤¸à¤¹à¤¿à¤¤ à¤Ÿà¥à¤°à¤¾à¤¨à¥à¤¸à¤«à¤° à¤—à¤°à¥à¤¨
 âœ… Device Management à¤¸à¤à¤— à¤¡à¤¿à¤­à¤¾à¤‡à¤¸à¤¹à¤°à¥‚ à¤Ÿà¥à¤°à¥à¤¯à¤¾à¤• à¤—à¤°à¥à¤¨
-âœ… Redis à¤¸à¤à¤— à¤®à¤²à¥à¤Ÿà¤¿à¤ªà¤² à¤¸à¤°à¥à¤­à¤° à¤¸à¥à¤•à¥‡à¤² à¤—à¤°à¥à¤¨
-âœ… à¤…à¤Ÿà¥‹-à¤œà¥‡à¤¨à¥‡à¤°à¥‡à¤Ÿà¥‡à¤¡ Swagger à¤¡à¤•à¥à¤®à¥‡à¤¨à¥à¤Ÿà¥‡à¤¸à¤¨ à¤¬à¤¨à¤¾à¤‰à¤¨
+à¥¨à¥¨. à¤¨à¤¿à¤·à¥ à¤•à¤°à¥ à¤· (Conclusion)
+à¤¬à¤§à¤¾à¤ˆ à¤›! à¤¤à¤ªà¤¾à¤ˆà¤ à¤²à¥‡ Dolphin Framework v2.0 à¤•à¥‹ Master Guide à¤ªà¥‚à¤°à¤¾ à¤—à¤°à¥ à¤¨à¥ à¤­à¤¯à¥‹à¥¤ à¤…à¤¬ à¤¤à¤ªà¤¾à¤ˆà¤ :
 
-à¤¸à¤•à¥à¤¨à¥à¤¹à¥à¤¨à¥à¤›à¥¤
+âœ… à¤¹à¤¾à¤ˆ-à¤ªà¤°à¥ à¤«à¤°à¥ à¤®à¥‡à¤¨à¥ à¤¸ API à¤¸à¤°à¥ à¤­à¤° à¤¬à¤¨à¤¾à¤‰à¤¨
+âœ… à¤…à¤Ÿà¥‹-à¤œà¥‡à¤¨à¥‡à¤°à¥‡à¤Ÿà¥‡à¤¡ Swagger à¤¡à¤•à¥ à¤®à¥‡à¤¨à¥ à¤Ÿà¥‡à¤¸à¤¨ à¤¬à¤¨à¤¾à¤‰à¤¨
 
-Happy Coding! ðŸ¬ðŸ‡³ðŸ‡µ
-à¤¨à¥‡à¤ªà¤¾à¤²à¤¬à¤¾à¤Ÿ à¤µà¤¿à¤¶à¥à¤µà¤¸à¥à¤¤à¤°à¤•à¥‹ à¤¸à¤«à¥à¤Ÿà¤µà¥‡à¤¯à¤° à¤¬à¤¨à¤¾à¤”à¤!
+à¤¸à¤•à¥ à¤¨à¥ à¤¹à¥ à¤¨à¥ à¤›à¥¤
+
+
+---
+
+## २१. Auto-Generated Client SDK & TypeScript Typings (.d.ts)
+
+Dolphin Framework ले ब्याकइन्डका सबै रुटहरू स्क्यान गरेर फ्रन्टइन्डका लागि **स्वतः JavaScript SDK र TypeScript Declarations** जेनेरेट गर्छ। यसले tRPC जस्तै End-to-End Type-Safety दिन्छ — तर कुनै पनि Schema परिभाषा बिना!
+
+### CLI कमाण्ड:
+```bash
+npx dolphin generate-client \
+  --url=http://localhost:4000 \
+  --out=./src/dolphin-client.js \
+  --key=your_secret_generation_key
+```
+
+यसले दुई फाइलहरू बनाउँछ:
+- `dolphin-client.js` — पूर्ण JavaScript SDK
+- `dolphin-client.d.ts` — TypeScript Autocomplete Typings
+
+### React मा प्रयोग:
+```typescript
+import { client } from './dolphin-client.js';
+
+// VS Code मा स्वतः Autocomplete!
+const todos = await client.api.todos.get();
+await client.api.todos.post({ title: 'नयाँ काम' });
+```
+
+### सुरक्षा (.env):
+```env
+DOLPHIN_GENERATE_KEY=your_sdk_generation_secret_key
+JWT_SECRET=your_jwt_secret
+```
+
+यदि `DOLPHIN_GENERATE_KEY` सेट गरिएको छ भने, साँचो बिना SDK डाउनलोड गर्न **`403 Forbidden`** आउँछ।
+
+---
+
+## २२. Dolphin Reactive Routes (HTTP-to-RT Auto-broadcasting)
+
+यो डल्फिनको सबैभन्दा इनोटिभ फिचर हो। साधारण HTTP रुटहरू लेखेर मात्र डेभलपरले **बिना कुनै अतिरिक्त ब्याकइन्ड कोड** रियलटाइम ब्रोडकास्ट पाउँछन्।
+
+### ब्याकइन्ड — केवल साधारण HTTP रुट लेख्ने:
+```javascript
+import { RealtimeCore } from 'dolphin-server-modules';
+
+const rt = new RealtimeCore();
+const app = createDolphinServer({ realtime: rt }); // autoReactive default: true
+
+app.use('/api/products', createCrudRouter(db, 'Product'));
+// POST/PUT/DELETE मा स्वतः 'products' टपिकमा ब्रोडकास्ट!
+```
+
+### फ्रन्टइन्ड — टपिक सुन्ने:
+```javascript
+const unsubscribe = client.connectRealtime((msg) => {
+  console.log(msg.action, msg.data); // 'create' { name: 'Product A' }
+}, ['products']);
+```
+
+### नियन्त्रण:
+```javascript
+// ग्लोबल्ली बन्द गर्न:
+createDolphinServer({ realtime: rt, autoReactive: false });
+
+// व्यक्तिगत रुटमा मात्र बन्द गर्न:
+app.post('/api/change-password', (ctx) => {
+  ctx.state.noReactive = true;
+  return { success: true };
+});
+```
+
+✅ Auto-Generated Client SDK (.js + .d.ts) बनाउन
+✅ HTTP-to-RT Reactive Routes प्रयोग गर्न
+✅ Secure SDK Generation Key राख्न
+✅ JWT-Verified WebSocket र SSE Realtime जडान गर्न
+
+Happy Coding! 🐬🇳🇵
+नेपालबाट विश्वस्तरको सफ्टवेयर बनाऊ!
