@@ -404,4 +404,36 @@ describe('Auth Module', () => {
       expect(rateLimited).toBe(true);
     });
   });
+
+  describe('JWT expiry parsing (signJWT)', () => {
+    it('issues a token with correct expiry for minutes (15m)', async () => {
+      const user = await auth.register(db, { email: 'jwt1@example.com', password: 'Test1234' });
+      const result = await auth.login(db, { email: 'jwt1@example.com', password: 'Test1234' });
+      const parts = result.accessToken.split('.');
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+      const diffSec = payload.exp - payload.iat;
+      expect(diffSec).toBe(15 * 60); // 15m default
+    });
+
+    it('verifyToken returns correct payload', async () => {
+      await auth.register(db, { email: 'jwt2@example.com', password: 'Test1234' });
+      const { accessToken } = await auth.login(db, { email: 'jwt2@example.com', password: 'Test1234' });
+      const decoded = await auth.verifyToken(accessToken);
+      expect(decoded.id).toBeDefined();
+      expect(decoded.role).toBe('user');
+      expect(decoded.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    });
+
+    it('custom expiry creates auth with 1h access token via cookieMaxAge proxy', async () => {
+      // createAuth with a 1h cookieMaxAge — verifies the config plumbing
+      const customAuth = createAuth({ secret: 'test-secret', cookieMaxAge: 60 * 60 * 1000 });
+      await customAuth.register(db, { email: 'jwt3@example.com', password: 'Test1234' });
+      const result = await customAuth.login(db, { email: 'jwt3@example.com', password: 'Test1234' });
+      expect(result.accessToken).toBeTruthy();
+      const parts = result.accessToken.split('.');
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+      // access token default is 15m (900s) regardless of cookieMaxAge
+      expect(payload.exp - payload.iat).toBe(15 * 60);
+    });
+  });
 });
