@@ -23,3 +23,7 @@ export type { DatabaseAdapter as AuthDatabaseAdapter } from './auth/auth.js';
 export * from './rpc/rpc.js';
 export * from './gateway/gateway.js';
 export * from './utils/adapters.js';
+
+// SQL + Serverless Adapters
+export * from './adapters/sql/index.js';
+export * from './adapters/serverless/index.js';

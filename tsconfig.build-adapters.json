@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "typeRoots": ["/home/runner/workspace/artifacts/api-server/node_modules/@types"],
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/adapters/sql/**/*",
+    "src/adapters/serverless/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts"
+  ]
+}

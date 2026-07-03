@@ -148,7 +148,17 @@
     "./webrtc": {
       "types": "./independent-modules/webrtc-calling/dist/index.d.ts",
       "default": "./independent-modules/webrtc-calling/dist/index.js"
-    }
+    },
+    "./adapters/sql": {
+      "types": "./dist/adapters/sql/index.d.ts",
+      "default": "./dist/adapters/sql/index.js"
+    },
+    "./adapters/sql/index.js": "./dist/adapters/sql/index.js",
+    "./adapters/serverless": {
+      "types": "./dist/adapters/serverless/index.d.ts",
+      "default": "./dist/adapters/serverless/index.js"
+    },
+    "./adapters/serverless/index.js": "./dist/adapters/serverless/index.js"
   },
   "scripts": {
     "build": "npm run build:client && tsc && tsc -p independent-modules/e2e-cryptography && tsc -p independent-modules/push-notifications && tsc -p independent-modules/webrtc-calling",
