@@ -2243,12 +2243,15 @@ curl http://localhost:3000/api/posts \
 | Resource | Link |
 |----------|------|
 | README | [README.md](./README.md) |
-| Master Guide | [DOLPHIN_MASTER_GUIDE_NEPALI.md](./DOLPHIN_MASTER_GUIDE_NEPALI.md) |
+| English Tutorial | [TUTORIAL.md](./TUTORIAL.md) |
+| Realtime Deep Dive | [RT_TUTORIAL_NEPALI.md](./RT_TUTORIAL_NEPALI.md) |
+| AI Agent Guide | [AI_TUTORIAL_NEPALI.md](./AI_TUTORIAL_NEPALI.md) |
 | Client Tutorial | [CLIENT_TUTORIAL_NEPALI.md](./CLIENT_TUTORIAL_NEPALI.md) |
+| Master Guide | [DOLPHIN_MASTER_GUIDE_NEPALI.md](./DOLPHIN_MASTER_GUIDE_NEPALI.md) |
 | NPM Package | [npmjs.com/package/dolphin-server-modules](https://www.npmjs.com/package/dolphin-server-modules) |
 | GitHub Issues | [github.com/Phuyalshankar/dolphin-server-modules/issues](https://github.com/Phuyalshankar/dolphin-server-modules/issues) |
 
 ---
 
 **Happy Coding! 🇳🇵🐬**  
-*Dolphin Server Modules — Nepali Developers को लागि, Nepali Developers द्वारा।*
+*Dolphin Server Modules v2.14.1 — Nepali Developers को लागि, Nepali Developers द्वारा।*
