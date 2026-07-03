@@ -22,7 +22,6 @@
     "DOLPHIN_MASTER_GUIDE_NEPALI.md",
     "scripts/client.js",
     "scripts/client.mjs",
-    "scripts/client.browser.js",
     "scripts/dolphin-persist.js",
     "independent-modules/e2e-cryptography/**",
     "!independent-modules/e2e-cryptography/node_modules/**",
@@ -52,15 +51,15 @@
     },
     "./controller.js": "./dist/controller/controller.js",
     "./crud": {
-      "types": "./dist/curd/crud.d.ts",
-      "default": "./dist/curd/crud.js"
+      "types": "./dist/crud/crud.d.ts",
+      "default": "./dist/crud/crud.js"
     },
-    "./crud.js": "./dist/curd/crud.js",
+    "./crud.js": "./dist/crud/crud.js",
     "./curd": {
-      "types": "./dist/curd/crud.d.ts",
-      "default": "./dist/curd/crud.js"
+      "types": "./dist/crud/crud.d.ts",
+      "default": "./dist/crud/crud.js"
     },
-    "./curd.js": "./dist/curd/crud.js",
+    "./curd.js": "./dist/crud/crud.js",
     "./middleware/zod": {
       "types": "./dist/middleware/zod.d.ts",
       "default": "./dist/middleware/zod.js"
@@ -161,13 +160,12 @@
     "./adapters/serverless/index.js": "./dist/adapters/serverless/index.js"
   },
   "scripts": {
-    "build": "npm run build:client && tsc && tsc -p independent-modules/e2e-cryptography && tsc -p independent-modules/push-notifications && tsc -p independent-modules/webrtc-calling",
+    "build": "tsc && tsc -p independent-modules/e2e-cryptography && tsc -p independent-modules/push-notifications && tsc -p independent-modules/webrtc-calling",
     "start": "node dist/demo-server.js",
     "dolphin": "node dist/bin/cli.js",
     "dev": "npm run build && npm run start",
     "test": "jest",
-    "prepublishOnly": "npm run build",
-    "build:client": "node -e \"const fs = require('fs'); const path = require('path'); const main = require.resolve('dolphin-client'); const distDir = path.dirname(main); fs.copyFileSync(path.join(distDir, 'dolphin-client.js'), 'scripts/client.browser.js');\""
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "dolphin",
@@ -183,13 +181,15 @@
   "author": "Shankar Phuyal",
   "license": "ISC",
   "dependencies": {
-    "argon2": "^0.40.1",
     "dolphin-client": "^1.1.2",
-    "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.3.2",
-    "ws": "^8.20.0",
     "zod": "^4.3.6"
+  },
+  "optionalDependencies": {
+    "argon2": "^0.40.1",
+    "ioredis": "^5.10.1",
+    "mongoose": "^9.3.2",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

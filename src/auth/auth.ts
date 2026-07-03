@@ -1,6 +1,5 @@
 // ultra-auth-dolphin-pro.ts — Production-ready, timing-safe, TOTP-compatible
 // ALL TESTS PASSING (19/19) - March 2026
-import argon2 from 'argon2';
 import crypto from 'node:crypto';
 
 // ===== CONSTANTS =====
@@ -296,8 +295,9 @@ class AuthError extends Error {
 
 // ===== LAZY DUMMY HASH =====
 let DUMMY_HASH: Promise<string> | null = null;
-const getDummyHash = () => {
+const getDummyHash = async () => {
   if (!DUMMY_HASH) {
+    const argon2 = await import('argon2');
     DUMMY_HASH = argon2.hash('dummy', { type: argon2.argon2id, memoryCost: 19456, timeCost: 2 });
   }
   return DUMMY_HASH;
@@ -396,8 +396,12 @@ export function createAuth(config: {
   };
   
   // Password hashing
-  const hashPassword = (pw: string) => argon2.hash(pw, { type: argon2.argon2id, memoryCost: 19456, timeCost: 2 });
+  const hashPassword = async (pw: string) => {
+    const argon2 = await import('argon2');
+    return argon2.hash(pw, { type: argon2.argon2id, memoryCost: 19456, timeCost: 2 });
+  };
   const verifyPassword = async (pw: string, hash?: string) => {
+    const argon2 = await import('argon2');
     if (!hash) {
       await argon2.verify(await getDummyHash(), 'dummy');
       return false;
@@ -473,6 +477,7 @@ export function createAuth(config: {
         if (totp) {
           twoFactorVerified = verifyTOTP(totp, base32Secret);
         } else if (recovery && user.recoveryCodes?.length) {
+          const argon2 = await import('argon2');
           for (let i = 0; i < user.recoveryCodes.length; i++) {
             if (await argon2.verify(user.recoveryCodes[i], recovery)) {
               user.recoveryCodes.splice(i, 1);
@@ -565,6 +570,7 @@ export function createAuth(config: {
       }
       
       const codes = generateRecoveryCodes();
+      const argon2 = await import('argon2');
       const hashedCodes = await Promise.all(
         codes.map(c => argon2.hash(c, { type: argon2.argon2id, timeCost: 2 }))
       );
@@ -693,6 +699,7 @@ export function createAuth(config: {
       }
       
       const codes = generateRecoveryCodes();
+      const argon2 = await import('argon2');
       const hashedCodes = await Promise.all(
         codes.map(c => argon2.hash(c, { type: argon2.argon2id, timeCost: 2 }))
       );

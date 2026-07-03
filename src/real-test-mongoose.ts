@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createDolphinServer } from './server/server.js';
 import { createMongooseAdapter } from './adapters/mongoose/index.js';
-import { createCrudController } from './curd/crud.js';
+import { createCrudController } from './crud/crud.js';
 
 // Define a sample schema
 const ProductSchema = new mongoose.Schema({

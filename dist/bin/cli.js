@@ -309,6 +309,48 @@ async function run() {
             }
             break;
         }
+        // ── generate-client / generate-sdk ───────────────────────────────────
+        case 'generate-client':
+        case 'generate-sdk': {
+            const urlArg = args.find(a => a.startsWith('--url='))?.split('=')[1] || 'http://localhost:3000';
+            const outArg = args.find(a => a.startsWith('--out='))?.split('=')[1] || './dolphin-client.js';
+            const keyArg = args.find(a => a.startsWith('--key='))?.split('=')[1] || '';
+            CLIUI.heading('Generating Dolphin Client SDK');
+            CLIUI.startSpinner(`Fetching schema from ${urlArg}...`);
+            try {
+                const fetchUrlJS = urlArg.replace(/\/$/, '') + '/dolphin-client.js';
+                const fetchUrlDTS = urlArg.replace(/\/$/, '') + '/dolphin-client.d.ts';
+                const headers = {};
+                if (keyArg) {
+                    headers['x-dolphin-key'] = keyArg;
+                }
+                const resJS = await fetch(fetchUrlJS, { headers });
+                if (!resJS.ok) {
+                    throw new Error(`Server returned status ${resJS.status} for JS`);
+                }
+                const sdkCode = await resJS.text();
+                const resDTS = await fetch(fetchUrlDTS, { headers });
+                if (!resDTS.ok) {
+                    throw new Error(`Server returned status ${resDTS.status} for DTS`);
+                }
+                const dtsCode = await resDTS.text();
+                const outPathJS = path.resolve(process.cwd(), outArg);
+                const outPathDTS = outPathJS.replace(/\.js$/, '.d.ts');
+                ensureDir(path.dirname(outPathJS));
+                fs.writeFileSync(outPathJS, sdkCode, 'utf8');
+                fs.writeFileSync(outPathDTS, dtsCode, 'utf8');
+                CLIUI.stopSpinner(true, `SDK & Typings generated successfully!`);
+                CLIUI.success(`Files saved:`);
+                console.log(`    📄 JS:  ${path.relative(process.cwd(), outPathJS)}`);
+                console.log(`    📄 DTS: ${path.relative(process.cwd(), outPathDTS)}`);
+            }
+            catch (e) {
+                CLIUI.stopSpinner(false, e.message);
+                CLIUI.error(`Could not generate SDK. Is the server running at ${urlArg}?`);
+                process.exit(1);
+            }
+            break;
+        }
         // ── generate-full ────────────────────────────────────────────────────
         case 'generate-full': {
             const fullPrompt = args.slice(1).join(' ');
@@ -615,6 +657,7 @@ Return ONLY a JSON object: {filePath: fileContent}. No markdown.`;
 \x1b[1mProject\x1b[0m
   status                       Project health check
   deploy                       PM2 deployment guide
+  generate-client [--url=N] [--out=F] Generate static SDK client file
 
 \x1b[1mInfo\x1b[0m
   -v / --version               Version

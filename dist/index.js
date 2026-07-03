@@ -6,7 +6,7 @@ export * from './signaling/index.js';
 export * from './auth/auth.js';
 export * from './authController/authController.js';
 export * from './controller/controller.js';
-export * from './curd/crud.js';
+export * from './crud/crud.js';
 export * from './middleware/zod.js';
 export * from './adapters/mongoose/index.js';
 export * from './server/server.js';
@@ -17,4 +17,7 @@ export * from './djson/djson.js';
 export * from './rpc/rpc.js';
 export * from './gateway/gateway.js';
 export * from './utils/adapters.js';
+// SQL + Serverless Adapters
+export * from './adapters/sql/index.js';
+export * from './adapters/serverless/index.js';
 //# sourceMappingURL=index.js.map

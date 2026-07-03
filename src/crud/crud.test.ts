@@ -1,6 +1,5 @@
 import { createCRUD, createCrudRouter } from './crud';
 
-// Simple in-memory adapter for testing
 class TestAdapter {
   private data: Record<string, any[]> = {};
 
@@ -13,7 +12,7 @@ class TestAdapter {
   async read(collection: string, query: any) {
     const items = this.data[collection] || [];
     if (!query || Object.keys(query).length === 0) return items;
-    
+
     return items.filter((item: any) => {
       for (const [key, val] of Object.entries(query)) {
         if (key === 'id' && item.id !== val) return false;
@@ -41,26 +40,25 @@ class TestAdapter {
 
   async delete(collection: string, query: any) {
     if (!this.data[collection]) return null;
-    
+
     if (query.id) {
       this.data[collection] = this.data[collection].filter((d: any) => d.id !== query.id);
       return { deleted: true };
     }
-    
+
     if (query._id) {
       this.data[collection] = this.data[collection].filter((d: any) => d.id !== query._id);
       return { deleted: true };
     }
-    
+
     if (Object.keys(query).length === 0) {
       this.data[collection] = [];
       return { deleted: true };
     }
-    
+
     return null;
   }
 
-  // Required methods for DatabaseAdapter interface
   async createUser() { return {}; }
   async findUserByEmail() { return null; }
   async findUserById() { return null; }
@@ -89,7 +87,7 @@ describe('CRUD Tests', () => {
   it('should read items', async () => {
     await crud.create('products', { name: 'Product 1' });
     await crud.create('products', { name: 'Product 2' });
-    
+
     const items = await crud.read('products');
     expect(items).toHaveLength(2);
   });
@@ -97,14 +95,14 @@ describe('CRUD Tests', () => {
   it('should update item', async () => {
     const created = await crud.create('products', { name: 'Old' });
     const updated = await crud.updateOne('products', created.id, { name: 'New' });
-    
+
     expect(updated?.name).toBe('New');
   });
 
   it('should delete item', async () => {
     const created = await crud.create('products', { name: 'Delete Me' });
     await crud.deleteOne('products', created.id);
-    
+
     const items = await crud.read('products');
     expect(items).toHaveLength(0);
   });
@@ -112,7 +110,7 @@ describe('CRUD Tests', () => {
   it('should read one item by id', async () => {
     const created = await crud.create('products', { name: 'Find Me' });
     const found = await crud.readOne('products', created.id);
-    
+
     expect(found).toBeDefined();
     expect(found.name).toBe('Find Me');
   });
@@ -124,6 +122,6 @@ describe('CRUD Tests', () => {
     expect(router).toHaveProperty('post');
     expect(router).toHaveProperty('put');
     expect(router).toHaveProperty('delete');
-    expect(router._routes.length).toBe(5); // get all, get one, create, update, delete
+    expect(router._routes.length).toBe(5);
   });
 });

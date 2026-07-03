@@ -6,7 +6,7 @@
 import mongoose, { Schema, Model } from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { createMongooseAdapter } from './index';
-import { createCRUD } from '../../curd/crud';
+import { createCRUD } from '../../crud/crud';
 
 // ===== Schemas =====
 const ProductSchema = new Schema({

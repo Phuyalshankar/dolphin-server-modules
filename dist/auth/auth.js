@@ -1,6 +1,5 @@
 // ultra-auth-dolphin-pro.ts — Production-ready, timing-safe, TOTP-compatible
 // ALL TESTS PASSING (19/19) - March 2026
-import argon2 from 'argon2';
 import crypto from 'node:crypto';
 // ===== CONSTANTS =====
 const DAY = 86400000;
@@ -246,8 +245,9 @@ class AuthError extends Error {
 }
 // ===== LAZY DUMMY HASH =====
 let DUMMY_HASH = null;
-const getDummyHash = () => {
+const getDummyHash = async () => {
     if (!DUMMY_HASH) {
+        const argon2 = await import('argon2');
         DUMMY_HASH = argon2.hash('dummy', { type: argon2.argon2id, memoryCost: 19456, timeCost: 2 });
     }
     return DUMMY_HASH;
@@ -317,8 +317,12 @@ export function createAuth(config) {
         }
     };
     // Password hashing
-    const hashPassword = (pw) => argon2.hash(pw, { type: argon2.argon2id, memoryCost: 19456, timeCost: 2 });
+    const hashPassword = async (pw) => {
+        const argon2 = await import('argon2');
+        return argon2.hash(pw, { type: argon2.argon2id, memoryCost: 19456, timeCost: 2 });
+    };
     const verifyPassword = async (pw, hash) => {
+        const argon2 = await import('argon2');
         if (!hash) {
             await argon2.verify(await getDummyHash(), 'dummy');
             return false;
@@ -385,6 +389,7 @@ export function createAuth(config) {
                     twoFactorVerified = verifyTOTP(totp, base32Secret);
                 }
                 else if (recovery && user.recoveryCodes?.length) {
+                    const argon2 = await import('argon2');
                     for (let i = 0; i < user.recoveryCodes.length; i++) {
                         if (await argon2.verify(user.recoveryCodes[i], recovery)) {
                             user.recoveryCodes.splice(i, 1);
@@ -468,6 +473,7 @@ export function createAuth(config) {
                 throw new AuthError('Invalid verification token', 401);
             }
             const codes = generateRecoveryCodes();
+            const argon2 = await import('argon2');
             const hashedCodes = await Promise.all(codes.map(c => argon2.hash(c, { type: argon2.argon2id, timeCost: 2 })));
             await db.updateUser(userId, {
                 twoFactorEnabled: true,
@@ -574,6 +580,7 @@ export function createAuth(config) {
                 throw new AuthError('Invalid 2FA token', 401);
             }
             const codes = generateRecoveryCodes();
+            const argon2 = await import('argon2');
             const hashedCodes = await Promise.all(codes.map(c => argon2.hash(c, { type: argon2.argon2id, timeCost: 2 })));
             await db.updateUser(userId, { recoveryCodes: hashedCodes });
             return { recoveryCodes: codes };

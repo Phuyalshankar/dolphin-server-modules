@@ -1,22 +1,87 @@
 import http from 'node:http';
-import { WebSocketServer } from 'ws';
+import { EventEmitter } from 'node:events';
 import { createDolphinRouter } from '../router/router.js';
+import { validateStructure } from '../middleware/zod.js';
+class LazyWebSocketServer extends EventEmitter {
+    realWss = null;
+    pendingEvents = [];
+    constructor() {
+        super();
+    }
+    async init() {
+        if (this.realWss)
+            return;
+        try {
+            const wsMod = await import('ws');
+            this.realWss = new wsMod.WebSocketServer({ noServer: true });
+            for (const [event, listener] of this.pendingEvents) {
+                this.realWss.on(event, listener);
+            }
+            this.pendingEvents = [];
+        }
+        catch (err) {
+            console.warn('⚠️ WebSockets are not supported in this runtime environment.', err);
+        }
+    }
+    on(event, listener) {
+        if (this.realWss) {
+            this.realWss.on(event, listener);
+        }
+        else {
+            this.pendingEvents.push([event, listener]);
+        }
+        return this;
+    }
+    emit(event, ...args) {
+        if (this.realWss) {
+            return this.realWss.emit(event, ...args);
+        }
+        return super.emit(event, ...args);
+    }
+    handleUpgrade(request, socket, head, cb) {
+        this.init().then(() => {
+            if (this.realWss) {
+                this.realWss.handleUpgrade(request, socket, head, cb);
+            }
+            else {
+                socket.destroy();
+            }
+        });
+    }
+}
 // Lazy-load client handler only in real ESM runtime (not during Jest CJS tests)
 // This keeps import.meta out of files loaded by tests, avoiding "not defined" / "outside module" errors
-let clientHandler = (ctx) => ctx.status(404).json({ error: 'Client library not found' });
+let clientHandler = (ctx, routes) => ctx.status(404).json({ error: 'Client library not found' });
+let clientDTSHandler = (ctx, routes) => ctx.status(404).json({ error: 'Client library typings not found' });
 if (!process.env.JEST_WORKER_ID) {
     import('./client-serve.js')
         .then((m) => {
         clientHandler = m.clientHandler || clientHandler;
+        clientDTSHandler = m.clientDTSHandler || clientDTSHandler;
     })
         .catch(() => { });
 }
 export function createDolphinServer(options = {}) {
     const router = createDolphinRouter();
+    const authorizeGen = (ctx, next) => {
+        const secretKey = process.env.DOLPHIN_GENERATE_KEY;
+        if (secretKey) {
+            const clientKey = ctx.getHeader('x-dolphin-key') || ctx.query.key;
+            if (clientKey !== secretKey) {
+                return ctx.status(403).json({ error: 'Unauthorized: Invalid or missing Dolphin Generation Key' });
+            }
+        }
+        next();
+    };
     // Automatically serve the client library (populated async from ESM-only helper)
-    router.get('/dolphin-client.js', (ctx) => clientHandler(ctx));
+    router.get('/dolphin-client.js', (ctx) => {
+        authorizeGen(ctx, () => clientHandler(ctx, router._routes));
+    });
+    router.get('/dolphin-client.d.ts', (ctx) => {
+        authorizeGen(ctx, () => clientDTSHandler(ctx, router._routes));
+    });
     const middlewares = [];
-    const wss = new WebSocketServer({ noServer: true });
+    const wss = new LazyWebSocketServer();
     const server = http.createServer(async (req, res) => {
         // Store status for chaining
         let pendingStatus = 200;
@@ -41,6 +106,52 @@ export function createDolphinServer(options = {}) {
         res.html = (data, status) => send(data, 'text/html', status);
         const host = req.headers.host || 'localhost';
         const parsedUrl = new URL(req.url, `http://${host}`);
+        // --- Native Realtime SSE Route (Edge/Serverless Compatible) ---
+        if (parsedUrl.pathname === '/realtime/sse') {
+            const deviceId = parsedUrl.searchParams.get('deviceId') || parsedUrl.searchParams.get('id') || 'anonymous_sse';
+            const token = parsedUrl.searchParams.get('token');
+            let user = null;
+            if (token) {
+                try {
+                    const jwt = require('jsonwebtoken');
+                    const secret = process.env.JWT_SECRET || 'change_in_production';
+                    user = jwt.verify(token, secret);
+                }
+                catch (err) {
+                    console.warn('[DolphinRealtime] SSE Token verification failed:', err.message);
+                }
+            }
+            res.writeHead(200, {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': '*'
+            });
+            res.write(': heartbeat\n\n');
+            if (options.realtime) {
+                const sseSocket = {
+                    readyState: 1, // OPEN
+                    user,
+                    send(data) {
+                        if (!res.writableEnded) {
+                            const payload = typeof data === 'string' ? data : JSON.stringify(data);
+                            res.write(`data: ${payload}\n\n`);
+                        }
+                    },
+                    close() {
+                        try {
+                            res.end();
+                        }
+                        catch { }
+                    }
+                };
+                options.realtime.register(deviceId, sseSocket);
+                req.on('close', () => {
+                    options.realtime.unregister(deviceId);
+                });
+            }
+            return;
+        }
         const ctx = {
             req,
             res,
@@ -137,6 +248,30 @@ export function createDolphinServer(options = {}) {
         if (match) {
             ctx.params = match.params;
             req.params = match.params;
+            // --- Automatic Zod Schema Validation ---
+            if (match.schema) {
+                try {
+                    if (match.schema.params) {
+                        ctx.params = validateStructure(match.schema.params, ctx.params);
+                        req.params = ctx.params;
+                    }
+                    if (match.schema.query) {
+                        ctx.query = validateStructure(match.schema.query, ctx.query);
+                        req.query = ctx.query;
+                    }
+                    if (match.schema.body) {
+                        ctx.body = validateStructure(match.schema.body, ctx.body);
+                        req.body = ctx.body;
+                    }
+                }
+                catch (err) {
+                    if (!res.headersSent) {
+                        const status = err.status || 400;
+                        send(err, 'application/json', status);
+                    }
+                    return;
+                }
+            }
             try {
                 let result;
                 const handlers = match.handlers;
@@ -215,6 +350,19 @@ export function createDolphinServer(options = {}) {
         wss.on('connection', (ws, request) => {
             const urlObj = new URL(request.url, `http://h`);
             const deviceId = urlObj.searchParams.get('deviceId') || urlObj.searchParams.get('id') || 'anonymous';
+            const token = urlObj.searchParams.get('token');
+            let user = null;
+            if (token) {
+                try {
+                    const jwt = require('jsonwebtoken');
+                    const secret = process.env.JWT_SECRET || 'change_in_production';
+                    user = jwt.verify(token, secret);
+                    ws.user = user; // attach user to socket
+                }
+                catch (err) {
+                    console.warn('[DolphinRealtime] WS Token verification failed:', err.message);
+                }
+            }
             options.realtime.register(deviceId, ws);
             ws.on('message', (data) => {
                 // Keep device alive on every message

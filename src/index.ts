@@ -7,7 +7,7 @@ export * from './signaling/index.js';
 export * from './auth/auth.js';
 export * from './authController/authController.js';
 export * from './controller/controller.js';
-export * from './curd/crud.js';
+export * from './crud/crud.js';
 export * from './middleware/zod.js';
 export * from './adapters/mongoose/index.js';
 export * from './server/server.js';
@@ -16,7 +16,7 @@ export * from './utils/ctx.js';
 export * from './djson/djson.js';
 
 // Resolve naming conflict for DatabaseAdapter
-export { DatabaseAdapter } from './curd/crud.js';
+export { DatabaseAdapter } from './crud/crud.js';
 export type { DatabaseAdapter as AuthDatabaseAdapter } from './auth/auth.js';
 
 // Microservices & HTTP Framework Adapters

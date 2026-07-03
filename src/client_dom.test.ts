@@ -1,5 +1,5 @@
 export {};
-const { DolphinClient } = require('../scripts/client.js');
+const { DolphinClient } = require('../scripts/client.cjs');
 
 class MockElement {
   tagName: string;

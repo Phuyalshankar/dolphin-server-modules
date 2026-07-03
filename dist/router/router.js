@@ -1,67 +1,188 @@
+class TrieNode {
+    segment = '';
+    isParam = false;
+    paramName = '';
+    isWildcard = false;
+    children = new Map();
+    paramChild = null;
+    wildcardChild = null;
+    // Stores handlers and schemas for methods, e.g., GET, POST, ALL
+    handlers = new Map();
+}
 export function createDolphinRouter() {
+    const root = new TrieNode();
     const routes = [];
-    const addRoute = (method, path, ...handlers) => {
-        // Normalize path to remove trailing slashes unless it's just /
+    const addRoute = (method, path, optsOrHandler, ...restHandlers) => {
+        let schema = undefined;
+        let handlers = [];
+        // Parse options vs handler signature
+        if (typeof optsOrHandler === 'object' && optsOrHandler !== null && !('req' in optsOrHandler)) {
+            schema = optsOrHandler.schema;
+            handlers = restHandlers;
+        }
+        else {
+            handlers = [optsOrHandler, ...restHandlers];
+        }
         const normalizedPath = path === '/' ? '/' : path.replace(/\/$/, '');
-        const keys = [];
-        const pattern = normalizedPath
-            .replace(/:([^\/]+)/g, (_, key) => {
-            keys.push(key);
-            return '([^\\/]+)';
-        })
-            .replace(/\./g, '\\.')
-            .replace(/\//g, '\\/');
+        const m = method.toUpperCase();
+        // Maintain flat routes list for subrouter .use() compatibility
         routes.push({
-            method: method.toUpperCase(),
+            method: m,
             path: normalizedPath,
             handlers,
-            regex: new RegExp(`^${pattern}$`),
-            keys
+            schema,
         });
+        // Split path into segments
+        const segments = normalizedPath.split('/').filter(Boolean);
+        let curr = root;
+        for (const segment of segments) {
+            if (segment.startsWith(':')) {
+                if (!curr.paramChild) {
+                    const node = new TrieNode();
+                    node.segment = segment;
+                    node.isParam = true;
+                    node.paramName = segment.slice(1);
+                    curr.paramChild = node;
+                }
+                curr = curr.paramChild;
+            }
+            else if (segment === '*' || segment.startsWith('*')) {
+                if (!curr.wildcardChild) {
+                    const node = new TrieNode();
+                    node.segment = segment;
+                    node.isWildcard = true;
+                    curr.wildcardChild = node;
+                }
+                curr = curr.wildcardChild;
+                break; // Wildcard matches all remaining path parts
+            }
+            else {
+                if (!curr.children.has(segment)) {
+                    const node = new TrieNode();
+                    node.segment = segment;
+                    curr.children.set(segment, node);
+                }
+                curr = curr.children.get(segment);
+            }
+        }
+        curr.handlers.set(m, { handlers, schema });
     };
     const router = {
-        get: (path, ...handlers) => addRoute('GET', path, ...handlers),
-        post: (path, ...handlers) => addRoute('POST', path, ...handlers),
-        put: (path, ...handlers) => addRoute('PUT', path, ...handlers),
-        delete: (path, ...handlers) => addRoute('DELETE', path, ...handlers),
-        patch: (path, ...handlers) => addRoute('PATCH', path, ...handlers),
-        all: (path, ...handlers) => addRoute('ALL', path, ...handlers),
-        /**
-         * Mount a sub-router or middleware.
-         * app.use('/auth', authRouter)
-         */
-        use: (prefix, subRouter) => {
+        get(path, optsOrHandler, ...handlers) {
+            addRoute('GET', path, optsOrHandler, ...handlers);
+            return router;
+        },
+        post(path, optsOrHandler, ...handlers) {
+            addRoute('POST', path, optsOrHandler, ...handlers);
+            return router;
+        },
+        put(path, optsOrHandler, ...handlers) {
+            addRoute('PUT', path, optsOrHandler, ...handlers);
+            return router;
+        },
+        delete(path, optsOrHandler, ...handlers) {
+            addRoute('DELETE', path, optsOrHandler, ...handlers);
+            return router;
+        },
+        patch(path, optsOrHandler, ...handlers) {
+            addRoute('PATCH', path, optsOrHandler, ...handlers);
+            return router;
+        },
+        all(path, optsOrHandler, ...handlers) {
+            addRoute('ALL', path, optsOrHandler, ...handlers);
+            return router;
+        },
+        use(prefix, subRouter) {
             if (typeof prefix !== 'string') {
-                // Fallback for global middleware handling if needed
-                return;
+                return router;
             }
             const normalizedPrefix = prefix === '/' ? '' : prefix.replace(/\/$/, '');
-            // If subRouter is another Dolphin router, merge its routes
             if (subRouter && typeof subRouter.match === 'function' && subRouter._routes) {
                 for (const sr of subRouter._routes) {
                     const fullPath = normalizedPrefix + (sr.path === '/' ? '' : sr.path);
-                    addRoute(sr.method, fullPath || '/', ...sr.handlers);
+                    addRoute(sr.method, fullPath || '/', { schema: sr.schema }, ...sr.handlers);
                 }
             }
+            return router;
         },
-        // Internal getter for route merging
         _routes: routes,
-        match(method, url) {
-            const path = url.split('?')[0];
+        match(method, path) {
+            const urlPath = path.split('?')[0];
+            const segments = urlPath.split('/').filter(Boolean);
             const m = method.toUpperCase();
-            for (const route of routes) {
-                if (route.method !== m && route.method !== 'ALL')
-                    continue;
-                const match = path.match(route.regex);
-                if (match) {
-                    const params = {};
-                    route.keys.forEach((key, i) => {
-                        params[key] = match[i + 1];
-                    });
-                    return { handlers: route.handlers, params };
+            const search = (node, idx, currentParams) => {
+                if (idx === segments.length) {
+                    const routeData = node.handlers.get(m) || node.handlers.get('ALL');
+                    if (routeData) {
+                        return {
+                            handlers: routeData.handlers,
+                            schema: routeData.schema,
+                            params: currentParams,
+                        };
+                    }
+                    if (node.wildcardChild) {
+                        const wildcardData = node.wildcardChild.handlers.get(m) || node.wildcardChild.handlers.get('ALL');
+                        if (wildcardData) {
+                            return {
+                                handlers: wildcardData.handlers,
+                                schema: wildcardData.schema,
+                                params: currentParams,
+                            };
+                        }
+                    }
+                    return null;
                 }
+                const segment = segments[idx];
+                // 1. Static match
+                if (node.children.has(segment)) {
+                    const res = search(node.children.get(segment), idx + 1, currentParams);
+                    if (res)
+                        return res;
+                }
+                // 2. Param match
+                if (node.paramChild) {
+                    const nextParams = { ...currentParams, [node.paramChild.paramName]: segment };
+                    const res = search(node.paramChild, idx + 1, nextParams);
+                    if (res)
+                        return res;
+                }
+                // 3. Wildcard match
+                if (node.wildcardChild) {
+                    const wildcardData = node.wildcardChild.handlers.get(m) || node.wildcardChild.handlers.get('ALL');
+                    if (wildcardData) {
+                        const rest = segments.slice(idx).join('/');
+                        const nextParams = { ...currentParams, '*': rest };
+                        return {
+                            handlers: wildcardData.handlers,
+                            schema: wildcardData.schema,
+                            params: nextParams,
+                        };
+                    }
+                }
+                return null;
+            };
+            if (segments.length === 0) {
+                const routeData = root.handlers.get(m) || root.handlers.get('ALL');
+                if (routeData) {
+                    return {
+                        handlers: routeData.handlers,
+                        schema: routeData.schema,
+                        params: {},
+                    };
+                }
+                if (root.wildcardChild) {
+                    const wildcardData = root.wildcardChild.handlers.get(m) || root.wildcardChild.handlers.get('ALL');
+                    if (wildcardData) {
+                        return {
+                            handlers: wildcardData.handlers,
+                            schema: wildcardData.schema,
+                            params: { '*': '' },
+                        };
+                    }
+                }
+                return null;
             }
-            return null;
+            return search(root, 0, {});
         }
     };
     return router;

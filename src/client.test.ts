@@ -15,10 +15,9 @@ export {};
  *  - disconnect
  */
 
-// Custom jest-esm-strip-transform.cjs ले automatically ESM export line strip गर्छ
-// त्यसैले सिधै client.js import गर्न मिल्छ — client.cjs manually बनाउनु पर्दैन
+// CommonJS consumer path validate गर्न canonical client.cjs प्रयोग गरिएको छ
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { DolphinClient } = require('../scripts/client.js');
+const { DolphinClient } = require('../scripts/client.cjs');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

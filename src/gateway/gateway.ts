@@ -1,5 +1,60 @@
 import http from 'node:http';
-import { WebSocketServer, WebSocket } from 'ws';
+import { EventEmitter } from 'node:events';
+
+class LazyWebSocketServer extends EventEmitter {
+  private realWss: any = null;
+  private pendingEvents: [string | symbol, (...args: any[]) => void][] = [];
+
+  constructor() {
+    super();
+  }
+
+  private async init() {
+    if (this.realWss) return;
+    try {
+      const wsMod = await import('ws');
+      this.realWss = new wsMod.WebSocketServer({ noServer: true });
+      for (const [event, listener] of this.pendingEvents) {
+        this.realWss.on(event, listener);
+      }
+      this.pendingEvents = [];
+    } catch (err) {
+      console.warn('⚠️ WebSockets are not supported in this runtime environment.', err);
+    }
+  }
+
+  on(event: string | symbol, listener: (...args: any[]) => void): this {
+    if (this.realWss) {
+      this.realWss.on(event, listener);
+    } else {
+      this.pendingEvents.push([event, listener]);
+    }
+    return this;
+  }
+
+  emit(event: string | symbol, ...args: any[]): boolean {
+    if (this.realWss) {
+      return this.realWss.emit(event, ...args);
+    }
+    return super.emit(event, ...args);
+  }
+
+  handleUpgrade(request: any, socket: any, head: any, cb: any) {
+    this.init().then(() => {
+      if (this.realWss) {
+        this.realWss.handleUpgrade(request, socket, head, cb);
+      } else {
+        socket.destroy();
+      }
+    });
+  }
+
+  close() {
+    if (this.realWss) {
+      this.realWss.close();
+    }
+  }
+}
 
 export interface GatewayRouteOptions {
   routes: { [prefix: string]: string };
@@ -13,7 +68,7 @@ export interface GatewayRouteOptions {
 export class DolphinAPIGateway {
   private routes: { prefix: string; target: string; isWildcard: boolean }[] = [];
   private server: http.Server | null = null;
-  private wss: WebSocketServer | null = null;
+  private wss: LazyWebSocketServer | null = null;
 
   constructor(options: GatewayRouteOptions) {
     // Sort routes by specificity (longer prefixes first) to prevent routing clashes
@@ -83,7 +138,7 @@ export class DolphinAPIGateway {
     });
 
     // Handle WebSocket Tunneling
-    this.wss = new WebSocketServer({ noServer: true });
+    this.wss = new LazyWebSocketServer();
 
     this.server.on('upgrade', (request, socket, head) => {
       const { pathname, search } = new URL(request.url || '', `http://${request.headers.host || 'localhost'}`);
@@ -94,23 +149,25 @@ export class DolphinAPIGateway {
         return;
       }
 
-      this.wss?.handleUpgrade(request, socket, head, (ws) => {
+      this.wss?.handleUpgrade(request, socket, head, async (ws: any) => {
         const targetUrl = new URL(matched.target);
         const wsProtocol = targetUrl.protocol === 'https:' ? 'wss:' : 'ws:';
         const targetWsUrl = `${wsProtocol}//${targetUrl.host}${pathname}${search}`;
 
-        const targetWs = new WebSocket(targetWsUrl);
+        const wsMod = await import('ws');
+        const WebSocketClass = wsMod.WebSocket || wsMod.default || wsMod;
+        const targetWs = new WebSocketClass(targetWsUrl);
 
         targetWs.on('open', () => {
           // Bidirectional message forwarding
-          ws.on('message', (message, isBinary) => {
-            if (targetWs.readyState === WebSocket.OPEN) {
+          ws.on('message', (message: any, isBinary: any) => {
+            if (targetWs.readyState === WebSocketClass.OPEN) {
               targetWs.send(message, { binary: isBinary });
             }
           });
 
-          targetWs.on('message', (message, isBinary) => {
-            if (ws.readyState === WebSocket.OPEN) {
+          targetWs.on('message', (message: any, isBinary: any) => {
+            if (ws.readyState === WebSocketClass.OPEN) {
               ws.send(message, { binary: isBinary });
             }
           });

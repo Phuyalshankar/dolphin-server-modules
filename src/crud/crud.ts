@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { createDolphinController } from '../controller/controller.js';
 import { createDolphinRouter } from '../router/router.js';
 
 export interface DatabaseAdapter {
@@ -26,7 +27,6 @@ export interface BaseDocument {
   [key: string]: any;
 }
 
-// ===== HELPER: Fix ID for Mongoose =====
 const fixId = (query: any): any => {
   if (!query) return query;
   const newQuery = { ...query };
@@ -37,7 +37,6 @@ const fixId = (query: any): any => {
   return newQuery;
 };
 
-// ===== SAFE METHOD CALLS =====
 const safeUpdate = async (db: DatabaseAdapter, collection: string, filter: any, data: any) => {
   const method = db.update || (db as any).updateOne;
   if (!method) throw new Error('No update method');
@@ -50,7 +49,6 @@ const safeDelete = async (db: DatabaseAdapter, collection: string, filter: any) 
   return method.call(db, collection, fixId(filter));
 };
 
-// ===== MATCH FILTER (Type Safe) =====
 const matchFilter = (item: any, filter: any): boolean => {
   for (const [key, val] of Object.entries(filter)) {
     if (key === '$and') {
@@ -78,17 +76,17 @@ const matchFilter = (item: any, filter: any): boolean => {
 
 export function createCRUD<T extends BaseDocument = BaseDocument>(
   db: DatabaseAdapter,
-  options: { 
-    enforceOwnership?: boolean; 
-    softDelete?: boolean; 
+  options: {
+    enforceOwnership?: boolean;
+    softDelete?: boolean;
     defaultLimit?: number;
-    realtime?: any; // To support automatic sync broadcasting
+    realtime?: any;
   } = {}
 ) {
   const { enforceOwnership = true, softDelete = false, defaultLimit = 100, realtime } = options;
   const generateId = () => crypto.randomBytes(12).toString('hex');
 
-  const broadcast = (collection: string, type: 'create'|'update'|'delete', data: any) => {
+  const broadcast = (collection: string, type: 'create' | 'update' | 'delete', data: any) => {
     if (realtime && typeof realtime.publish === 'function') {
       realtime.publish(`db:sync/${collection.toLowerCase()}`, { type, data });
     }
@@ -112,21 +110,18 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
       for (const k of keys) {
         const av = (a as any)[k];
         const bv = (b as any)[k];
-        
-        // Handle null/undefined values
+
         if (av == null && bv == null) continue;
         if (av == null) return sort[k] === 'asc' ? -1 : 1;
         if (bv == null) return sort[k] === 'asc' ? 1 : -1;
-        
-        // Handle different types
+
         if (typeof av !== typeof bv) {
-          // Treat numbers < strings < booleans < objects for consistency
           const typeOrder = ['number', 'string', 'boolean', 'object'];
           const at = typeOrder.indexOf(typeof av);
           const bt = typeOrder.indexOf(typeof bv);
           return sort[k] === 'asc' ? (at - bt) : (bt - at);
         }
-        
+
         if (av === bv) continue;
         return sort[k] === 'asc' ? (av > bv ? 1 : -1) : (av > bv ? -1 : 1);
       }
@@ -165,14 +160,14 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
       if (enforceOwnership && !userId) return [];
       let items: T[] = [];
       const finalFilter = fixId(withOwnership(filter, userId));
-      
+
       if (db.advancedRead) {
         items = filterDeleted(await db.advancedRead(collection, finalFilter, options));
       } else {
         const raw = await db.read(collection, {});
         items = filterDeleted(raw).filter(i => matchFilter(i, finalFilter));
       }
-      
+
       if (options.sort) items = sortItems(items, options.sort);
       if (options.offset || options.limit !== undefined) {
         const start = options.offset || 0;
@@ -186,12 +181,12 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
       if (enforceOwnership && !userId) return null;
       let filter = withOwnership({ id }, userId);
       let results = await db.read(collection, filter);
-      
+
       if (results.length === 0) {
         filter = withOwnership({ _id: id }, userId);
         results = await db.read(collection, filter);
       }
-      
+
       if (results.length === 0) return null;
       const updateData = { ...data, updatedAt: new Date().toISOString() };
       await safeUpdate(db, collection, filter, updateData);
@@ -216,14 +211,14 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
       if (enforceOwnership && !userId) return null;
       let filter = withOwnership({ id }, userId);
       let results = await db.read(collection, filter);
-      
+
       if (results.length === 0) {
         filter = withOwnership({ _id: id }, userId);
         results = await db.read(collection, filter);
       }
-      
+
       if (results.length === 0) return null;
-      
+
       if (softDelete) {
         await db.update(collection, filter, { deletedAt: new Date().toISOString() });
         const result = results[0] as T;
@@ -240,12 +235,12 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
     async deleteMany(collection: string, filter: any, userId?: string): Promise<number> {
       if (enforceOwnership && !userId) return 0;
       const items = await this.read(collection, withOwnership(filter, userId), {}, userId);
-      
+
       if (softDelete) {
         await Promise.all(items.map(item => {
-            const res = db.update(collection, { id: item.id }, { deletedAt: new Date().toISOString() });
-            broadcast(collection, 'delete', item);
-            return res;
+          const res = db.update(collection, { id: item.id }, { deletedAt: new Date().toISOString() });
+          broadcast(collection, 'delete', item);
+          return res;
         }));
       } else {
         await safeDelete(db, collection, fixId(withOwnership(filter, userId)));
@@ -257,26 +252,22 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
     async restore(collection: string, id: string, userId?: string): Promise<T | null> {
       if (!softDelete) throw new Error('Soft delete not enabled');
       if (enforceOwnership && !userId) return null;
-      
-      // Search by id first
+
       let filter = withOwnership({ id, deletedAt: { $ne: null } }, userId);
       let results = await db.read(collection, filter);
-      
-      // Then try by _id
+
       if (results.length === 0) {
         filter = withOwnership({ _id: id, deletedAt: { $ne: null } }, userId);
         results = await db.read(collection, filter);
       }
-      
+
       if (results.length === 0) return null;
-      
-      // Remove deletedAt field
-      await db.update(collection, filter, { 
-        deletedAt: null, 
-        updatedAt: new Date().toISOString() 
+
+      await db.update(collection, filter, {
+        deletedAt: null,
+        updatedAt: new Date().toISOString()
       });
-      
-      // Return restored document
+
       return this.readOne(collection, id, userId);
     },
 
@@ -300,33 +291,57 @@ export function createCRUD<T extends BaseDocument = BaseDocument>(
 }
 
 export function createCrudController<T extends BaseDocument = BaseDocument>(
-  adapter: any, 
+  adapter: any,
   collection: string,
   options?: { enforceOwnership?: boolean; softDelete?: boolean; defaultLimit?: number }
 ) {
   const service = createCRUD<T>(adapter, options);
+  const controller = createDolphinController(service, collection, {
+    softDelete: options?.softDelete,
+  });
+
   return {
     getAll: async (ctx: any) => {
-      const { limit, offset, ...filters } = ctx.query;
-      const results = await service.read(collection, filters, { limit: limit ? parseInt(limit) : undefined, offset: offset ? parseInt(offset) : undefined }, ctx.req?.user?.id);
-      ctx.json(results);
+      const { limit, offset, ...filters } = ctx.query || {};
+      const result = await service.read(
+        collection,
+        filters,
+        {
+          limit: limit ? parseInt(limit) : undefined,
+          offset: offset ? parseInt(offset) : undefined
+        },
+        ctx.req?.user?.id
+      );
+      ctx.json(result);
     },
     getOne: async (ctx: any) => {
-      const result = await service.readOne(collection, ctx.params.id, ctx.req?.user?.id);
+      const result = await controller.get(
+        { params: ctx.params || {}, query: ctx.query || {} },
+        ctx.req?.user?.id
+      );
       if (!result) return ctx.status(404).json({ error: 'Not Found' });
       ctx.json(result);
     },
     create: async (ctx: any) => {
-      const result = await service.create(collection, ctx.body, ctx.req?.user?.id);
+      const result = await controller.create(
+        { body: ctx.body || {} },
+        ctx.req?.user?.id
+      );
       ctx.status(201).json(result);
     },
     update: async (ctx: any) => {
-      const result = await service.updateOne(collection, ctx.params.id, ctx.body, ctx.req?.user?.id);
+      const result = await controller.update(
+        { params: ctx.params || {}, query: ctx.query || {}, body: ctx.body || {} },
+        ctx.req?.user?.id
+      );
       if (!result) return ctx.status(404).json({ error: 'Not Found' });
       ctx.json(result);
     },
     delete: async (ctx: any) => {
-      const result = await service.deleteOne(collection, ctx.params.id, ctx.req?.user?.id);
+      const result = await controller.delete(
+        { params: ctx.params || {}, query: ctx.query || {} },
+        ctx.req?.user?.id
+      );
       if (!result) return ctx.status(404).json({ error: 'Not Found' });
       ctx.json({ success: true, deleted: result });
     }
