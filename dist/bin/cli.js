@@ -138,7 +138,17 @@ function injectIntoDbAdapter(N) {
         changed = true;
     }
     // ── 2. models: { } object मा model थप्ने ────────────────────────────────
-    if (!src.includes(`${N}:`)) {
+    // BUG FIX: `src.includes(`${N}:`)` was fragile — matched comments like `// Product: ...`
+    // Now we check for the model as a standalone identifier inside models:{} only.
+    const alreadyInModels = (() => {
+        const modelsMatch = src.match(/models\s*:\s*\{([^}]*)\}/);
+        if (!modelsMatch)
+            return false;
+        const inner = modelsMatch[1];
+        // Match: `Product,` or `Product }` or `Product\n` but NOT `// Product:`
+        return new RegExp(`(?<!//[^\\n]*)\\b${N}\\b\\s*[,}\\n]`).test(inner);
+    })();
+    if (!alreadyInModels) {
         const modelsRegex = /models\s*:\s*\{([^}]*)\}/;
         const match = modelsRegex.exec(src);
         if (match) {

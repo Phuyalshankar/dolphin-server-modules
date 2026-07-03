@@ -3,6 +3,7 @@ export declare function createDolphinServer(options?: {
     port?: number;
     host?: string;
     realtime?: any;
+    allowedWebSocketPaths?: string[];
 }): {
     http: http.Server<typeof http.IncomingMessage, typeof http.ServerResponse>;
     wss: import("ws").Server<typeof import("ws").default, typeof http.IncomingMessage>;

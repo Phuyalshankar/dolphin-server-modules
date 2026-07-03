@@ -55,7 +55,8 @@ export const db = createMongooseAdapter({
   User,
   RefreshToken,
   models: {
-    User,
+    // यहाँ अरू CRUD models थप्नुहोस् (User र RefreshToken थप्नु हुन्न — माथि नै छ)
+    // उदाहरण: Product, Order, Category ...
   },
   leanByDefault: true,
   softDelete: false
@@ -397,11 +398,15 @@ import { User, RefreshToken } from '../models/User.js';
 // import { Product } from '../models/Product.js';
 
 export const db = createMongooseAdapter({
-  User: User,
-  RefreshToken: RefreshToken,
+  User,          // Auth को लागि — required (यहाँ नै registered छ)
+  RefreshToken,  // Auth को लागि — required (यहाँ नै registered छ)
 
   models: {
-    User,
+    // यहाँ CRUD models थप्नुहोस् (User र RefreshToken थप्नु हुन्न — माथि नै छ)
+    // double registration भयो भने CRUD ले auth email check bypass गर्छ!
+    // उदाहरण:
+    // Product,
+    // Order,
   },
   leanByDefault: true,
   softDelete: false

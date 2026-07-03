@@ -602,6 +602,7 @@ describe('DolphinStore', () => {
     // Trigger a remote update manually
     c.store.data.set('items', { _rawItems: [{ id: 1 }], items: [], loading: false, success: true, error: null, _filter: null, _sort: null });
     c.store._applyTransform(c.store.data.get('items'));
+    await Promise.resolve();
     expect(listener).toHaveBeenCalled();
     unsub();
   });

@@ -195,7 +195,14 @@ export function createDolphinServer(options = {}) {
     // --- WebSocket Upgrade Handling ---
     server.on('upgrade', (request, socket, head) => {
         const { pathname } = new URL(request.url, `http://${request.headers.host}`);
-        if (pathname === '/phone' || pathname === '/realtime') {
+        const allowedPaths = options.allowedWebSocketPaths || ['/phone', '/realtime'];
+        const isAllowed = allowedPaths.some((p) => {
+            if (p.endsWith('/*')) {
+                return pathname.startsWith(p.slice(0, -2));
+            }
+            return pathname === p;
+        });
+        if (isAllowed) {
             wss.handleUpgrade(request, socket, head, (ws) => {
                 wss.emit('connection', ws, request);
             });
@@ -206,7 +213,8 @@ export function createDolphinServer(options = {}) {
     });
     if (options.realtime) {
         wss.on('connection', (ws, request) => {
-            const deviceId = new URL(request.url, `http://h`).searchParams.get('deviceId') || 'anonymous';
+            const urlObj = new URL(request.url, `http://h`);
+            const deviceId = urlObj.searchParams.get('deviceId') || urlObj.searchParams.get('id') || 'anonymous';
             options.realtime.register(deviceId, ws);
             ws.on('message', (data) => {
                 // Keep device alive on every message

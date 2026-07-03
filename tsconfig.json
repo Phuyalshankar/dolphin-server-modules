@@ -17,5 +17,19 @@
   "include": [
     "src/**/*"
   ],
-  "exclude": ["node_modules", "dist", "src/client/**/*"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/client/**/*",
+    "src/**/*.test.ts",
+    "src/test-dolphin.ts",
+    "src/test-2fa-real.ts",
+    "src/real-test-mongoose.ts",
+    "src/demo-server.ts",
+    "src/dolphin-bench.ts",
+    "src/performance-test.ts",
+    "src/hard-performance-test.ts",
+    "src/client_dom.test.ts",
+    "src/client.test.ts"
+  ]
 }

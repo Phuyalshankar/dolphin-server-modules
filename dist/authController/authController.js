@@ -260,22 +260,24 @@ export const createDolphinAuthController = (db, authConfig) => {
         },
     };
     const middleware = {
+        // BUG FIX: ctx directly pass गर्नुपर्छ — ctx.req, ctx.res होइन।
+        // Dolphin Server को raw res मा .status() हुँदैन, त्यसैले Express path crash हुन्थ्यो।
+        // authCore.middleware() ले typeof arg2 === 'function' && !arg3 को आधारमा Dolphin style detect गर्छ।
         middleware: (opts) => {
             return async (ctx, next) => {
-                await authCore.middleware(opts)(ctx.req, ctx.res, next);
+                await authCore.middleware(opts)(ctx, next);
             };
         },
         requireAuth: async (ctx, next) => {
-            await authCore.middleware()(ctx.req, ctx.res, next);
+            await authCore.middleware()(ctx, next);
         },
         require2FA: async (ctx, next) => {
-            await authCore.middleware({ require2FA: true })(ctx.req, ctx.res, next);
+            await authCore.middleware({ require2FA: true })(ctx, next);
         },
         requireAdmin: async (ctx, next) => {
-            await authCore.middleware()(ctx.req, ctx.res, async () => {
-                if (ctx.req.user?.role !== 'admin') {
-                    ctx.res.statusCode = 403;
-                    ctx.res.end(JSON.stringify({ error: 'Admin access required' }));
+            await authCore.middleware()(ctx, async () => {
+                if (ctx.req?.user?.role !== 'admin') {
+                    ctx.status(403).json({ error: 'Admin access required' });
                     return;
                 }
                 if (next)

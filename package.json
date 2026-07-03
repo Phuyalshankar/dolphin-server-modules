@@ -198,5 +198,13 @@
   },
   "bugs": {
     "url": "https://github.com/Phuyalshankar/dolphin-server-modules/issues"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "argon2",
+      "dolphin-client",
+      "esbuild",
+      "mongodb-memory-server"
+    ]
   }
 }

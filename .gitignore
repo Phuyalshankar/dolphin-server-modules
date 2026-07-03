@@ -1,3 +1,8 @@
 node_modules/
 dist/
 .env
+*.tsbuildinfo
+scratch/
+real-test/
+test-crud-inject/
+ai-project/

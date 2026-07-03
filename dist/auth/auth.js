@@ -45,9 +45,29 @@ const base32Decode = (str) => {
 // ===== TIMING-SAFE JWT =====
 const base64UrlEncode = (buf) => buf.toString('base64url');
 const base64UrlDecode = (str) => Buffer.from(str, 'base64url');
+/**
+ * Parse time-string into milliseconds.
+ * Supports: 's' (seconds), 'm' (minutes), 'h' (hours), 'd' (days), 'w' (weeks).
+ * Example: '15m' → 900000, '1h' → 3600000, '7d' → 604800000
+ * Falls back to 15 minutes for unknown/invalid strings.
+ */
+const parseExpiry = (expiresIn) => {
+    const n = parseInt(expiresIn, 10);
+    if (isNaN(n) || n <= 0)
+        return 15 * 60 * 1000;
+    const unit = expiresIn.slice(String(n).length).toLowerCase();
+    switch (unit) {
+        case 's': return n * 1000;
+        case 'm': return n * 60 * 1000;
+        case 'h': return n * 60 * 60 * 1000;
+        case 'd': return n * 24 * 60 * 60 * 1000;
+        case 'w': return n * 7 * 24 * 60 * 60 * 1000;
+        default: return 15 * 60 * 1000; // fallback
+    }
+};
 const signJWT = async (payload, secret, expiresIn = '15m') => {
     const header = base64UrlEncode(Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));
-    const expiresInMs = expiresIn.endsWith('m') ? parseInt(expiresIn) * 60 * 1000 : 15 * 60 * 1000;
+    const expiresInMs = parseExpiry(expiresIn);
     const iat = Math.floor(Date.now() / 1000);
     const exp = iat + Math.floor(expiresInMs / 1000);
     const fullPayload = {

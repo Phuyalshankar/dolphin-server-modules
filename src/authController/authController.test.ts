@@ -1,5 +1,5 @@
 // test/auth-controller.test.ts
-import { describe, it, expect, beforeEach } from '@jest/globals';
+
 
 // Mock the auth controller module
 jest.mock('../authController/authController', () => ({
