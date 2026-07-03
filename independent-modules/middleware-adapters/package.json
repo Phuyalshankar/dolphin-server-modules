@@ -1,0 +1,30 @@
+{
+  "name": "@dolphin/middleware-adapters",
+  "version": "1.0.0",
+  "description": "Framework-agnostic Express-style middleware — works with Express, Fastify, Next.js, Hono, Koa, NestJS, and Vanilla Node.js",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "test": "node --experimental-vm-modules ../../node_modules/.bin/jest --config jest.config.json",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "middleware", "express", "fastify", "nextjs", "hono", "koa", "nestjs",
+    "rate-limit", "cors", "auth", "jwt", "logger", "node"
+  ],
+  "author": "Shankar Phuyal",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "@types/node": "^20.11.30"
+  }
+}
