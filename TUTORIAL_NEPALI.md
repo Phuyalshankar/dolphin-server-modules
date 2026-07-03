@@ -251,11 +251,96 @@ npx dolphin status
 #   –  REDIS_URL    (set छैन)
 ```
 
-### ४.५ Version र Help
+### ४.५ Serve — Port Test
 
 ```bash
-npx dolphin --version    # 🐬 Dolphin CLI v2.14.1
-npx dolphin help         # सबै commands को list
+# Port खुला छ/छैन check गर्ने
+npx dolphin serve
+# 🐬 Dolphin Dev Server — port 3000
+# ✔ Server is live at http://localhost:3000
+# Ctrl+C थिचेर रोक्नुहोस्।
+
+# Custom port
+npx dolphin serve --port=8080
+```
+
+> ⚠️ यो तपाईँको `app.js` run गर्दैन — TCP port live छ/छैन check गर्ने simple utility हो। Development मा `node app.js` वा `node --watch app.js` प्रयोग गर्नुहोस्।
+
+---
+
+### ४.६ Deploy — PM2 Guide
+
+```bash
+npx dolphin deploy
+```
+
+यसले **step-by-step PM2 deployment guide** देखाउँछ:
+
+```
+  Step 1 — PM2 install:
+  npm install -g pm2
+
+  Step 2 — Build (TypeScript भए):
+  npm run build
+
+  Step 3 — Start:
+  pm2 start app.js --name "dolphin-app" --env production
+
+  Step 4 — Auto-start on reboot:
+  pm2 startup && pm2 save
+
+  Step 5 — Logs:
+  pm2 logs dolphin-app
+
+  ─── ecosystem.config.js (cluster mode) ────────────────
+  module.exports = {
+    apps: [{ name: 'dolphin-app', script: 'app.js',
+      instances: 'max', exec_mode: 'cluster',
+      env_production: { NODE_ENV: 'production', PORT: 3000 }
+    }]
+  };
+  pm2 start ecosystem.config.js --env production
+```
+
+> **dist/index.js** छ भने त्यही use गर्छ, नभए `app.js` — automatically detect गर्छ।
+
+---
+
+### ४.७ सबै Commands Summary
+
+```bash
+# ─── Scaffolding ───────────────────────────────────
+npx dolphin init                        # Full project scaffold
+npx dolphin init-prod                   # init जस्तै (same output)
+
+npx dolphin add adapter mongoose        # adapters/connection.js + db.js
+npx dolphin add adapter sequelize       # config/db.js (MySQL/PostgreSQL)
+npx dolphin add adapter redis           # config/redis.js
+
+npx dolphin add auth                    # controllers/auth.js + models/User.js
+npx dolphin add crud <ModelName>        # model + app.js route + db.js register (सबै automatic)
+npx dolphin add model <ModelName>       # models/ModelName.js मात्र
+npx dolphin add route <Name>            # routes/name.js
+npx dolphin add middleware <Name>       # middleware/name.js
+npx dolphin add service <Name>          # services/Name.service.js
+
+# ─── Database ──────────────────────────────────────
+npx dolphin connect mongoose [uri]      # MongoDB TCP + Mongoose test
+npx dolphin connect redis [uri]         # Redis TCP test
+
+# ─── AI (API key चाहिन्छ) ─────────────────────────
+npx dolphin generate "prompt"           # → ai-generated.js
+npx dolphin generate-full "prompt"      # → multiple files (AI decides)
+npx dolphin chat                        # Interactive AI agent (file read/write/run)
+
+# ─── Project ───────────────────────────────────────
+npx dolphin status                      # Project health check
+npx dolphin deploy                      # PM2 deployment guide
+npx dolphin serve [--port=N]            # TCP port test server
+
+# ─── Info ──────────────────────────────────────────
+npx dolphin --version                   # 🐬 Dolphin CLI v2.14.1
+npx dolphin help                        # सबै commands को list
 ```
 
 ---
@@ -1653,69 +1738,193 @@ POST /api/auth/reset-password
 
 ## १२. AI Features
 
-### १२.१ Setup
+### १२.१ Setup — API Key
 
-**.env मा API key राख्नुहोस्:**
+कुनै एउटा मात्र चाहिन्छ। `.env` मा राख्नुहोस्:
+
 ```env
-# कुनै एउटा मात्र चाहिन्छ:
-GEMINI_API_KEY=your_gemini_api_key      # Google Gemini (recommended)
-GROQ_API_KEY=your_groq_api_key          # Groq (Llama 3 — fast)
-OPENAI_API_KEY=your_openai_api_key      # OpenAI GPT
-DOLPHIN_AI_KEY=any_of_the_above        # Custom name पनि काम गर्छ
-```
+# ── Cloud AI (कुनै एउटा) ─────────────────────────────
+GEMINI_API_KEY=your_gemini_api_key      # Google Gemini (recommended, free tier छ)
+GROQ_API_KEY=your_groq_api_key          # Groq — Llama 3 (ultra fast, free tier)
+OPENAI_API_KEY=your_openai_api_key      # OpenAI GPT-4
 
-### १२.२ Quick Code Generation
+# Universal alias (माथिका जुनसुकैलाई)
+DOLPHIN_AI_KEY=your_any_api_key_here
 
-```bash
-# Single file generate गर्ने
-npx dolphin generate "Create a middleware that logs all requests with timestamps and user info"
-# ai-generated.js बन्छ
+# ── Advanced (optional) ──────────────────────────────
+DOLPHIN_AI_BASE_URL=https://custom-endpoint.com/v1   # Custom OpenAI-compatible endpoint
+DOLPHIN_AI_MODEL=gemini-2.0-flash                    # Model override
 
-npx dolphin generate "Build a rate limiting middleware for Express"
-npx dolphin generate "Create a MongoDB aggregation pipeline for monthly sales report"
-```
-
-### १२.३ Full Project Generate गर्ने
-
-```bash
-# पूर्ण project structure generate
-npx dolphin generate-full "E-commerce backend with products, categories, orders, and payment status"
-# Multiple files बन्छन् — models, routes, controllers सबै
-```
-
-### १२.४ AI Chat (Cursor Mode)
-
-```bash
-npx dolphin chat
-# 🐬 Dolphin Agent Ready!
-# > 
-```
-
-Chat examples:
-```
-> Add a Product model with name, price, stock, and category fields
-> Create auth middleware that checks if user is verified
-> Show me how to add pagination to the products route
-> Generate an order controller with status updates
-```
-
-### १२.५ Local AI (Ollama — Free, Offline)
-
-```bash
-# Ollama install (https://ollama.ai)
-ollama pull gemma3:latest    # Model download
-ollama serve                 # Server start
-```
-
-**.env मा:**
-```env
+# ── Local AI (Free, Offline) ─────────────────────────
 USE_OLLAMA=true
 OLLAMA_MODEL=gemma3:latest
 ```
 
+> **Priority:** `DOLPHIN_AI_KEY` → `GEMINI_API_KEY` → `GROQ_API_KEY` → `OPENAI_API_KEY` → Ollama
+
+---
+
+### १२.२ `dolphin generate` — Single File Generation
+
+AI ले एउटा JavaScript file बनाउँछ — `ai-generated.js` मा save हुन्छ।
+
 ```bash
-npx dolphin chat   # अब local Ollama प्रयोग गर्छ — free!
+# Middleware generate
+npx dolphin generate "Create a request logger middleware that logs method, url, status and response time"
+
+# Service generate
+npx dolphin generate "Create an email service using nodemailer with sendMail and sendResetLink functions"
+
+# Mongoose aggregation
+npx dolphin generate "MongoDB aggregation pipeline for monthly sales report grouped by category"
+
+# Helper function
+npx dolphin generate "Nepali date converter - AD to BS and BS to AD"
 ```
+
+**Output:** `ai-generated.js` current directory मा बन्छ।
+
+> ⚠️ दोस्रो पल्ट run गर्दा **overwrite** हुन्छ। Important file भए rename गर्नुहोस्।
+
+---
+
+### १२.३ `dolphin generate-full` — Full Project Architecture
+
+AI ले **multiple files** एकैपटक बनाउँछ — models, routes, controllers, adapters सबै।
+
+```bash
+npx dolphin generate-full "E-commerce backend with products, categories, orders, cart, and payment status tracking"
+```
+
+**AI ले बनाउन सक्ने files:**
+```
+models/Product.js
+models/Order.js
+models/Category.js
+routes/products.js
+routes/orders.js
+controllers/orderController.js
+adapters/db.js        (⚠ .env छ भने skip गर्छ)
+app.js
+```
+
+**अर्को example:**
+```bash
+npx dolphin generate-full "School management system with students, teachers, classes, and attendance"
+
+npx dolphin generate-full "Hospital appointment booking API with doctors, patients, and time slots"
+
+npx dolphin generate-full "Blog platform with posts, comments, tags, and user profiles"
+```
+
+> **Tip:** Prompt जति specific भयो, output उति राम्रो हुन्छ। Model names, fields, relationships mention गर्नुहोस्।
+
+---
+
+### १२.४ `dolphin chat` — AI Agent (Cursor Mode)
+
+यो सबैभन्दा शक्तिशाली feature हो। AI agent ले तपाईँको project **हेर्न**, **code लेख्न**, **patch गर्न**, र **command run गर्न** सक्छ।
+
+```bash
+npx dolphin chat
+# 🐬 Dolphin Agent Ready!
+# > _
+```
+
+**Agent ले गर्न सक्ने काम:**
+
+| Action | Example Prompt |
+|--------|----------------|
+| File पढ्ने | `"app.js मा के छ?"` |
+| File लेख्ने / update गर्ने | `"models/Product.js मा stock field थप"` |
+| Code patch गर्ने | `"auth.js को login function मा lastLoginAt update गर"` |
+| Files list गर्ने | `"models/ folder मा के-के छ?"` |
+| Command run गर्ने | `"npm install zod run gar"` |
+| Code search गर्ने | `"app.js मा CORS कहाँ छ?"` |
+
+**Real examples:**
+
+```
+> Product model मा rating (1-5) र reviewCount field थप र mongoose validation लगाऊ
+
+> app.js मा /api/products route छ? नभए थपिदेऊ
+
+> adapters/db.js मा Order model register गरिदेऊ
+
+> Register endpoint मा name field पनि accept गर र User model मा save गर
+
+> createCrudRouter ले pagination support गर्छ? देखाऊ
+```
+
+**Roman Nepali पनि बुझ्छ:**
+```
+> Product model ma price validation thap - minimum 0 hunu parcha
+> app.js ma rate limiting middleware thap
+> User model ko email field ko index herna
+```
+
+**History हेर्ने:**
+```
+> /history      ← पछिल्ला conversations हेर्ने
+> /clear        ← history clear गर्ने
+> /exit         ← chat बाट बाहिर
+```
+
+---
+
+### १२.५ `dolphin chat` — Agent Permissions
+
+Agent ले file modify गर्न **confirm माग्न सक्छ**:
+
+```
+🔧 Code lekhdai/update gardai: models/Product.js
+  Confirm? (y/n): y
+  📝 Wrote to models/Product.js ✅
+
+⚠️ Khataranak Command: rm -rf node_modules
+  Confirm? (y/n): n
+  🚫 Action denied.
+```
+
+> Agent ले dangerous commands (`rm -rf`, `format`, `drop`) run गर्न confirm गर्छ।
+
+---
+
+### १२.६ Local AI (Ollama — Free, Offline)
+
+Cloud API key नभई पनि आफ्नो machine मा AI run गर्न:
+
+```bash
+# Step 1: Ollama install
+# macOS:   brew install ollama
+# Linux:   curl -fsSL https://ollama.ai/install.sh | sh
+
+# Step 2: Model download (एकपल्ट मात्र)
+ollama pull gemma3:latest      # Google Gemma3 (recommended, ~5GB)
+ollama pull llama3.2:latest    # Meta Llama 3.2 (~2GB, faster)
+ollama pull codellama:latest   # Code-focused model
+
+# Step 3: Ollama server start
+ollama serve
+
+# Step 4: .env मा set गर्ने
+USE_OLLAMA=true
+OLLAMA_MODEL=gemma3:latest
+
+# Step 5: Use गर्ने
+npx dolphin chat           # Local AI — internet नचाहिने!
+npx dolphin generate "..."  # Local AI generate
+```
+
+**Ollama vs Cloud:**
+
+| Feature | Ollama (Local) | Cloud (Gemini/Groq) |
+|---------|----------------|---------------------|
+| Cost | Free | Free tier / Paid |
+| Speed | Machine depend | Fast |
+| Privacy | 100% local | Cloud मा जान्छ |
+| Internet | Not needed | Required |
+| Quality | Good | Better |
 
 ---
 
