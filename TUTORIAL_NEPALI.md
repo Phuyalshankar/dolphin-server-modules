@@ -12,14 +12,33 @@
 5. [Auth System (प्रमाणीकरण)](#५-auth-system)
 6. [CRUD Operations](#६-crud-operations)
 7. [Mongoose Adapter (सही setup)](#७-mongoose-adapter)
-8. [Realtime WebSocket](#८-realtime-websocket)
-9. [Middleware](#९-middleware)
-10. [2FA (Two-Factor Authentication)](#१०-2fa)
-11. [Password Reset](#११-password-reset)
-12. [AI Features (CLI)](#१२-ai-features)
-13. [Production Deployment](#१३-production-deployment)
-14. [Common Bugs र Solutions](#१४-common-bugs-र-solutions)
-15. [सम्पूर्ण Example Project](#१५-सम्पूर्ण-example-project)
+8. [Realtime WebSocket — Server (RealtimeCore v2)](#८-realtime-websocket-server-side--realtimecore-v2)
+   - [८.२ publish](#८२-publish--message-पठाउने)
+   - [८.३ subscribe / unsubscribe](#८३-subscribe--unsubscribe--message-सुन्ने)
+   - [८.४ broadcast](#८४-broadcast--सबैलाई-पठाउने)
+   - [८.५ sendTo — Direct device](#८५-sendto--एउटै-device-लाई-direct-पठाउने)
+   - [८.६ Device Management](#८६-device-management)
+   - [८.७ pubPush / subPull — IoT / High-Frequency](#८७-pubpush--subpull--high-frequency-iot-data)
+   - [८.८ File Transfer](#८८-pubfile--subfile--file-transfer-chunked)
+   - [८.९ P2P Pass](#८९-p2p-pass--peer-to-peer-data)
+   - [८.१० ACL](#८१०-acl--access-control)
+   - [८.११ Redis Scaling](#८११-redis-scaling--multiple-servers)
+   - [८.१२ Plugins](#८१२-plugins--custom-protocols-modbus-hl7)
+   - [८.१३ Raw WebSocket Protocol](#८१३-raw-websocket-protocol-browser--no-library)
+9. [DolphinClient — Frontend Library](#८-ख-dolphinclient-frontend-library)
+   - [Pub/Sub](#८-ख२-realtime--pubsub)
+   - [Auth (login, 2FA, reset)](#८-ख३-auth--login--register--2fa)
+   - [API HTTP Calls](#८-ख४-api--http-requests)
+   - [React Store (useSyncExternalStore)](#८-ख५-store--react-usesyncexternalstore)
+   - [File Transfer](#८-ख६-file-transfer-client-side)
+   - [Hookless DOM](#८-ख७-hookless-dom--javascript-नलेखीकनै-ui)
+10. [Middleware](#९-middleware)
+11. [2FA (Two-Factor Authentication)](#१०-2fa)
+12. [Password Reset](#११-password-reset)
+13. [AI Features (CLI)](#१२-ai-features)
+14. [Production Deployment](#१३-production-deployment)
+15. [Common Bugs र Solutions](#१४-common-bugs-र-solutions)
+16. [सम्पूर्ण Example Project](#१५-सम्पूर्ण-example-project)
 
 ---
 
@@ -676,7 +695,9 @@ const sorted = await db.advancedRead(
 
 ---
 
-## ८. Realtime WebSocket
+## ८. Realtime WebSocket (Server-Side — RealtimeCore v2)
+
+Dolphin को Realtime system MQTT-style pub/sub हो। Topics ले data route गर्छ, wildcards support गर्छ, Redis ले multiple servers scale गर्छ।
 
 ### ८.१ Server Setup
 
@@ -686,106 +707,740 @@ import { createDolphinServer } from 'dolphin-server-modules/server';
 import { createRealtimeCore } from 'dolphin-server-modules/realtime';
 
 const rt = createRealtimeCore({
-  debug: false,               // true भए logs देखिन्छ
-  maxMessageSize: 256 * 1024, // 256KB max per message
-  // redisUrl: process.env.REDIS_URL,  // Multiple servers को लागि Redis
+  debug: false,                    // true भए verbose logs
+  maxMessageSize: 256 * 1024,      // 256KB max per message (default)
+  enableJSONCache: true,           // Repeated same-object publish को cache गर्ने
+  useBinaryProtocol: false,        // true भए binary framing (speed+)
+  maxBufferPerTopic: 100,          // pubPush buffer per topic (IoT)
+  enableP2P: false,                // P2P peer discovery
+  // redisUrl: process.env.REDIS_URL,  // Multiple servers को लागि
+  // acl: {
+  //   canSubscribe: (deviceId, topic) => true,
+  //   canPublish:   (deviceId, topic) => true,
+  // },
 });
 
-const app = createDolphinServer({ 
+const app = createDolphinServer({
   realtime: rt,
-  allowedWebSocketPaths: ['/realtime'],  // WebSocket accept गर्ने paths
-});
-
-// Server बाट publish गर्ने
-setTimeout(() => {
-  rt.publish('system/status', { 
-    online: true, 
-    users: 42,
-    ts: Date.now() 
-  }, { retain: true });  // retain: true — नयाँ subscriber ले immediately पाउँछ
-}, 1000);
-
-// Server मा subscribe गर्ने
-rt.subscribe('chat/#', (data, topic) => {
-  console.log(`Message on ${topic}:`, data);
-  
-  // Broadcast to all — सबैलाई पठाउने
-  rt.publish('chat/broadcast', { 
-    from: 'server',
-    ...data 
-  });
+  allowedWebSocketPaths: ['/realtime'],
 });
 
 app.listen(3000);
 ```
 
-### ८.२ Client (Browser)
+---
 
-```html
-<!DOCTYPE html>
-<html>
-<body>
-<script>
-  // WebSocket connect
-  const ws = new WebSocket('ws://localhost:3000/realtime?deviceId=my-browser-001');
-  
-  ws.onopen = () => {
-    console.log('Connected!');
-    
-    // Subscribe गर्ने (messages receive गर्न)
-    ws.send(JSON.stringify({ 
-      type: 'sub', 
-      topic: 'chat/room1' 
-    }));
-    
-    // Publish गर्ने (message पठाउन)
-    ws.send(JSON.stringify({ 
-      type: 'pub', 
-      topic: 'chat/room1',
-      payload: { 
-        message: 'नमस्ते सबैलाई!',
-        from: 'Ram' 
-      }
-    }));
-  };
-  
-  ws.onmessage = (event) => {
-    const { topic, payload } = JSON.parse(event.data);
-    console.log(`[${topic}]`, payload);
-    // Topic: chat/room1, Payload: { message: 'नमस्ते', from: 'Ram' }
-  };
-  
-  ws.onclose = () => console.log('Disconnected');
-  ws.onerror = (err) => console.error('WebSocket error:', err);
-</script>
-</body>
-</html>
+### ८.२ publish — Message पठाउने
+
+```js
+// साधारण publish
+rt.publish('chat/room1', { message: 'नमस्ते!', from: 'server' });
+
+// Retained message — नयाँ subscriber ले join गर्दा immediately पाउँछ
+rt.publish('system/status', { online: true, users: 42 }, { retain: true });
+
+// TTL सहित retained — 1 मिनेट पछि expire
+rt.publish('flash/sale', { discount: 20 }, { retain: true, ttl: 60_000 });
+
+// ACL device ID सहित (optional)
+rt.publish('news/global', { headline: '...' }, {}, 'device-abc');
 ```
 
-### ८.३ Topic Wildcards
+---
+
+### ८.३ subscribe / unsubscribe — Message सुन्ने
 
 ```js
 // Exact match
-rt.subscribe('chat/room1', fn);          // 'chat/room1' मात्र
+rt.subscribe('chat/room1', (data, topic) => {
+  console.log('Room1 message:', data);
+});
 
-// Single level wildcard (+)
-rt.subscribe('chat/+', fn);              // 'chat/room1', 'chat/room2' — एक level
-rt.subscribe('user/+/update', fn);       // 'user/abc/update', 'user/xyz/update'
+// Wildcard: + = एक level मात्र
+rt.subscribe('chat/+', (data, topic) => {
+  // 'chat/room1', 'chat/room2' — match हुन्छ
+  // 'chat/room1/messages' — match हुँदैन
+  console.log(`[${topic}]`, data);
+});
 
-// Multi-level wildcard (#)
-rt.subscribe('chat/#', fn);              // 'chat/room1', 'chat/room1/messages' सबै
-rt.subscribe('logs/#', fn);              // 'logs/error', 'logs/info/detail' सबै
+// Wildcard: # = सबै sub-levels
+rt.subscribe('logs/#', (data, topic) => {
+  // 'logs/error', 'logs/info', 'logs/http/404' — सबै match
+});
+
+// Device-specific subscribe (subscription tracking को लागि)
+rt.subscribe('user/abc123/notify', (data) => {
+  console.log('User notification:', data);
+}, 'device-abc123');
+
+// Unsubscribe — function reference चाहिन्छ
+const handler = (data, topic) => console.log(data);
+rt.subscribe('updates/+', handler);
+rt.unregister('device-abc123', 'updates/+');  // deviceId-based unsubscribe
 ```
 
-### ८.४ High-Frequency Data (IoT)
+---
+
+### ८.४ broadcast — सबैलाई पठाउने
 
 ```js
-// IoT sensors, live graphs को लागि — Ultra fast
-rt.pubPush('sensors/temperature', Buffer.from([22, 45, 78]));  // Binary
-rt.pubPush('sensors/humidity', { value: 65.3, ts: Date.now() });
+// Connected सबै devices लाई पठाउने
+rt.broadcast('announcements/all', { 
+  message: 'Server restart in 5 minutes!',
+  ts: Date.now()
+});
 
-// Client ले माग्दा डाटा दिने
-rt.subPull('device-001', 'sensors/temperature', 10);  // पछिल्लो 10 readings
+// Specific devices लाई exclude गरेर
+rt.broadcast('chat/room1', { message: 'Hello everyone!' }, {
+  exclude: ['device-admin', 'device-bot']  // यी दुईलाई पठाउँदैन
+});
+```
+
+---
+
+### ८.५ sendTo — एउटै Device लाई Direct पठाउने
+
+```js
+// deviceId जान्नु पर्छ
+const sent = rt.sendTo('device-abc123', {
+  type: 'PRIVATE_MESSAGE',
+  from: 'server',
+  text: 'तपाईँको account verify भयो!'
+});
+
+if (!sent) {
+  console.log('Device offline छ');
+}
+
+// Device online छ/छैन check गर्ने
+const ready = rt.isReady('device-abc123');   // socket open र connected
+const online = rt.isOnline('device-abc123'); // devices map मा छ
+```
+
+---
+
+### ८.६ Device Management
+
+```js
+// Device register गर्ने (server ले automatically गर्छ WebSocket upgrade मा)
+// Manual register (custom WebSocket server भए):
+rt.register('my-device-001', socket, { userAgent: 'Mobile App' });
+
+// Device kick गर्ने (ban/abuse)
+rt.kick('bad-device-id', 'Terms of service violation');
+
+// सबै subscriptions हटाउने (disconnect)
+rt.unregister('device-abc123');
+
+// Specific topic बाट मात्र हटाउने
+rt.unregister('device-abc123', 'chat/room1');
+
+// Device lastSeen update गर्ने (heartbeat)
+rt.touch('device-abc123');
+
+// Stats हेर्ने
+const stats = rt.getStats();
+console.log(stats);
+// {
+//   version: '2.0',
+//   devices: 42,          ← connected devices
+//   retained: 5,          ← retained messages
+//   plugins: 0,
+//   highFreqBuffers: 3,   ← IoT buffer topics
+//   files: 2,             ← registered files
+//   activeTransfers: 1,   ← ongoing downloads
+//   peers: 0
+// }
+```
+
+---
+
+### ८.७ pubPush / subPull — High-Frequency IoT Data
+
+IoT sensors, live graphs, stock tickers — JSON overhead बिना ultra-fast data streaming।
+
+```js
+// Server side: sensor data push (No JSON.stringify, No Redis, No ACL overhead)
+setInterval(() => {
+  // Binary Buffer (fastest)
+  rt.pubPush('sensors/temp', Buffer.from([Math.round(25 + Math.random() * 10)]));
+  
+  // Object पनि चल्छ
+  rt.pubPush('sensors/humidity', { value: 65.3, ts: Date.now() });
+  
+  // Stock ticker
+  rt.pubPush('stocks/NABIL', { price: 1240.5, change: +2.3 });
+}, 100);  // 10 times per second
+
+// Client ले पुरानो data माग्ने (server ले buffer बाट दिन्छ)
+rt.subPull('device-mobile-001', 'sensors/temp', 50);  // पछिल्लो 50 readings
+// Device लाई PULL_DATA type message मिल्छ
+```
+
+**Client side (Raw WebSocket):**
+```js
+ws.send(JSON.stringify({ type: 'pub_push', topic: 'sensors/temp', payload: 25.4 }));
+ws.send(JSON.stringify({ type: 'sub_pull', topic: 'sensors/temp', count: 20 }));
+```
+
+---
+
+### ८.८ pubFile / subFile — File Transfer (Chunked)
+
+ठूला files WebSocket मार्फत 64KB chunks मा transfer।
+
+**Server: File register गर्ने**
+```js
+import { readFileSync } from 'fs';
+
+// File server मा register गर्ने
+const fileData = readFileSync('./reports/monthly.pdf');
+const fileId = await rt.pubFile('monthly-report-2026', fileData, 'monthly.pdf');
+console.log(`File registered: ${fileId}`);
+
+// File info
+const info = rt.getFileInfo('monthly-report-2026');
+// { path, size, chunkSize: 65536, totalChunks, name, hash, createdAt }
+
+// सबै available files
+const files = rt.listFiles();
+// [{ fileId, name, size, totalChunks }]
+```
+
+**Server: Client लाई file पठाउने**
+```js
+// Client ले request गर्दा device लाई chunks पठाउने
+rt.subFile('device-mobile-001', 'monthly-report-2026');
+
+// Chunk 5 बाट resume गर्ने (partially downloaded)
+rt.subFile('device-mobile-001', 'monthly-report-2026', 5);
+
+// Resume: progress automatically track गरेको ठाउँबाट सुरु
+rt.resumeFile('device-mobile-001', 'monthly-report-2026');
+
+// Progress check
+const lastChunk = rt.getFileProgress('device-mobile-001', 'monthly-report-2026');
+```
+
+---
+
+### ८.९ P2P Pass — Peer-to-Peer Data
+
+Server ले directly client-to-client data relay गर्छ (WebRTC signaling alternative)।
+
+```js
+// P2P enable गर्ने
+const rt = createRealtimeCore({ enableP2P: true });
+
+// File peer लाई announce गर्ने
+rt.announceToPeers('big-video-file', 'device-seeder');
+// सबै connected devices लाई 'p2p/announce' topic मा PEER_AVAILABLE message जान्छ
+
+// कुन devices मा file छ?
+const peers = rt.getPeersForFile('big-video-file');
+// ['device-seeder', 'device-xyz']
+
+// Peer बाट specific chunk माग्ने
+rt.requestFromPeer('device-downloader', 'device-seeder', 'big-video-file', 3);
+// device-seeder लाई P2P_REQUEST message जान्छ
+
+// Peer-to-peer data पठाउने (server pass-through)
+rt.sendToPeer('device-a', 'device-b', { chunk: 3, data: '...' });
+```
+
+---
+
+### ८.१० ACL — Access Control
+
+कुन device ले कुन topic subscribe/publish गर्न सक्छ।
+
+```js
+const rt = createRealtimeCore({
+  acl: {
+    canSubscribe: (deviceId, topic) => {
+      // Admin जो पनि subscribe गर्न सक्छ
+      if (deviceId.startsWith('admin-')) return true;
+      
+      // Users ले आफ्नै topic मात्र
+      if (topic.startsWith(`user/${deviceId}/`)) return true;
+      
+      // Public topics
+      if (topic.startsWith('public/')) return true;
+      
+      return false;  // बाँकी सबै deny
+    },
+    canPublish: (deviceId, topic) => {
+      // Admin ले जतापनि publish
+      if (deviceId.startsWith('admin-')) return true;
+      
+      // Users ले आफ्नै namespace मात्र
+      return topic.startsWith(`user/${deviceId}/`);
+    }
+  }
+});
+```
+
+---
+
+### ८.११ Redis Scaling — Multiple Servers
+
+```bash
+npm install ioredis
+```
+
+```js
+// Server 1 र Server 2 — दुवैमा same Redis URL
+const rt = createRealtimeCore({
+  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+});
+
+// Server 1 मा publish → Server 2 का subscribers ले पनि पाउँछन्
+// Automatic — कुनै code change चाहिँदैन
+```
+
+---
+
+### ८.१२ Plugins — Custom Protocols (Modbus, HL7)
+
+```js
+import { RealtimePlugin } from 'dolphin-server-modules/realtime';
+
+// Custom binary protocol plugin
+const myProtocol = {
+  name: 'my-sensor-protocol',
+  
+  // यो plugin कहिले activate हुन्छ?
+  match: (ctx) => ctx.raw && ctx.raw[0] === 0xAA,  // Magic byte check
+  
+  // Binary → Object
+  decode: (buf) => ({
+    deviceId: buf.readUInt16BE(1),
+    temperature: buf.readInt16BE(3) / 100,
+    humidity: buf.readUInt16BE(5) / 100,
+  }),
+  
+  // Object → Binary
+  encode: (data) => {
+    const buf = Buffer.alloc(7);
+    buf[0] = 0xAA;
+    buf.writeUInt16BE(data.deviceId, 1);
+    buf.writeInt16BE(Math.round(data.temperature * 100), 3);
+    buf.writeUInt16BE(Math.round(data.humidity * 100), 5);
+    return buf;
+  },
+  
+  // Message handler
+  onMessage: (ctx) => {
+    const decoded = ctx.payload;
+    ctx.publish(`sensors/${decoded.deviceId}/data`, decoded);
+  }
+};
+
+rt.use(myProtocol);
+```
+
+---
+
+### ८.१३ Raw WebSocket Protocol (Browser — no library)
+
+```js
+const ws = new WebSocket('ws://localhost:3000/realtime?deviceId=browser-001');
+
+ws.onopen = () => {
+  // Subscribe
+  ws.send(JSON.stringify({ type: 'sub', topic: 'chat/room1' }));
+
+  // Publish
+  ws.send(JSON.stringify({ 
+    type: 'pub', 
+    topic: 'chat/room1', 
+    payload: { message: 'नमस्ते!', from: 'Ram' }
+  }));
+
+  // High-freq push
+  ws.send(JSON.stringify({ type: 'pub_push', topic: 'sensors/temp', payload: 25.4 }));
+
+  // Pull historical data
+  ws.send(JSON.stringify({ type: 'sub_pull', topic: 'sensors/temp', count: 20 }));
+
+  // File download request
+  ws.send(JSON.stringify({ type: 'sub_file', fileId: 'monthly-report-2026' }));
+
+  // Unsubscribe
+  ws.send(JSON.stringify({ type: 'unsub', topic: 'chat/room1' }));
+};
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  
+  switch(msg.type) {
+    case 'message':    // Normal pub/sub
+      console.log(`[${msg.topic}]`, msg.payload);
+      break;
+    case 'PULL_DATA':  // subPull response
+      console.log('Historical data:', msg.data);
+      break;
+    case 'PULL_EMPTY': // No buffer data
+      console.log('No data yet for:', msg.topic);
+      break;
+    case 'FILE_CHUNK': // File transfer chunk
+      console.log(`Chunk ${msg.chunkIndex}/${msg.totalChunks}:`, msg.data);
+      break;
+    case 'FILE_COMPLETE':
+      console.log('Download complete!');
+      break;
+    case 'KICK':
+      console.log('Kicked:', msg.message);
+      break;
+  }
+};
+
+ws.onclose = () => console.log('WebSocket closed');
+ws.onerror = (e) => console.error('WebSocket error:', e);
+```
+
+---
+
+## ८-ख. DolphinClient (Frontend Library)
+
+`dolphin-client` package ले Browser र Node.js मा Dolphin server सँग connect गर्न मद्दत गर्छ। Auth, HTTP API, Realtime WebSocket, File transfer, React store — सबै built-in।
+
+### ८-ख.१ Install र Setup
+
+```bash
+npm install dolphin-client
+```
+
+```html
+<!-- Browser (CDN) -->
+<script src="node_modules/dolphin-client/dist/dolphin-client.js"></script>
+```
+
+```js
+// ESM / Node.js
+import { DolphinClient } from 'dolphin-client';
+
+const dolphin = new DolphinClient('http://localhost:3000', 'my-device-001', {
+  autoConnect: true,        // new DolphinClient पछि automatically connect
+  reconnectAttempts: 5,     // disconnect भए कति पल्ट retry
+  reconnectDelay: 2000,     // retry बीच ms
+  debug: false,             // true भए verbose logs
+  httpTimeout: 10_000,      // HTTP request timeout (ms)
+  wsHeartbeat: 30_000,      // WebSocket ping interval
+});
+
+// Manual connect (autoConnect: false भए)
+await dolphin.connect();
+
+// Disconnect
+dolphin.disconnect();
+```
+
+---
+
+### ८-ख.२ Realtime — Pub/Sub
+
+```js
+// Subscribe — MQTT wildcards support
+dolphin.subscribe('chat/room1', (payload, topic) => {
+  console.log(`[${topic}]`, payload);
+});
+
+dolphin.subscribe('user/+/update', (payload, topic) => {
+  const userId = topic.split('/')[1];
+  console.log(`User ${userId} updated:`, payload);
+});
+
+// Publish — offline भए queue मा राख्छ, reconnect भएपछि flush
+dolphin.publish('chat/room1', { 
+  message: 'नमस्ते!', 
+  from: 'Ram',
+  ts: Date.now() 
+});
+
+// Unsubscribe
+const handler = (payload) => console.log(payload);
+dolphin.subscribe('news/#', handler);
+dolphin.unsubscribe('news/#', handler);
+
+// High-frequency push (IoT)
+dolphin.pubPush('sensors/temp', { value: 25.4, ts: Date.now() });
+
+// Historical data माग्ने
+dolphin.subPull('sensors/temp', 30);  // पछिल्लो 30 readings
+```
+
+---
+
+### ८-ख.३ Auth — Login / Register / 2FA
+
+```js
+// Register
+const regResult = await dolphin.auth.register({
+  email: 'ram@example.com',
+  password: 'Secure123',
+  name: 'Ram Bahadur',  // extra fields pass गर्न सकिन्छ
+});
+
+// Login
+const loginResult = await dolphin.auth.login('ram@example.com', 'Secure123');
+console.log(loginResult.accessToken);  // JWT
+// Token automatically save + future requests मा header लाग्छ
+
+// Current user
+const user = await dolphin.auth.me();
+console.log(user.email, user.role);
+
+// Logout (token clear + refresh token revoke)
+await dolphin.auth.logout();
+
+// Token manually set गर्ने (external login flow भए)
+dolphin.setToken('eyJhbGc...');
+
+// Token refresh गर्ने (httpOnly cookie बाट)
+const refreshed = await dolphin.auth.refresh();  // returns true/false
+
+// ─── 2FA ───
+const { secret, uri } = await dolphin.auth.enable2FA();
+// uri लाई QR code बनाउन QRCode library use गर्नुहोस्
+
+await dolphin.auth.verify2FA('123456', 'ram@example.com');
+
+await dolphin.auth.disable2FA('123456');
+
+// Password Reset
+await dolphin.auth.forgotPassword('ram@example.com');
+await dolphin.auth.resetPassword('reset-token-from-email', 'NewPass456');
+```
+
+---
+
+### ८-ख.४ API — HTTP Requests
+
+```js
+// Proxy-style (chainable path)
+const products = await dolphin.api.products.get();
+const one = await dolphin.api.products({ id: 'abc123' }).get();
+const created = await dolphin.api.products.post({ title: 'Laptop', price: 150000 });
+const updated = await dolphin.api.products({ id: 'abc123' }).put({ price: 140000 });
+await dolphin.api.products({ id: 'abc123' }).del();
+
+// Direct request
+const data = await dolphin.api.request('GET', '/api/products');
+const posted = await dolphin.api.request('POST', '/api/auth/register', {
+  email: 'test@example.com',
+  password: 'Test1234'
+});
+
+// requestDirect — timeout, retry, auto token-refresh सहित
+const result = await dolphin.api.requestDirect('GET', '/api/auth/me');
+
+// Custom headers
+const secured = await dolphin.api.request('GET', '/api/admin', null, {
+  headers: { 'X-Admin-Key': 'secret' }
+});
+```
+
+---
+
+### ८-ख.५ Store — React useSyncExternalStore
+
+Server data React component मा automatically sync। No useState, No useEffect।
+
+```js
+import { useSyncExternalStore } from 'react';
+import { DolphinClient } from 'dolphin-client';
+
+const dolphin = new DolphinClient('http://localhost:3000', 'react-app');
+await dolphin.connect();
+
+// Product list React component मा sync
+function ProductList() {
+  const products = useSyncExternalStore(
+    (listener) => dolphin.store.subscribe(listener),
+    () => dolphin.store.getSnapshot('products')
+  );
+
+  if (!products) return <p>Loading...</p>;
+
+  return (
+    <ul>
+      {products.items.map(p => (
+        <li key={p.id}>{p.title} — रु. {p.price}</li>
+      ))}
+    </ul>
+  );
+}
+
+// Server-side: products publish गर्ने
+// rt.publish('products/update', updatedProducts) — automatic sync!
+
+// Cleanup (component unmount)
+useEffect(() => {
+  return () => dolphin.store.destroy();
+}, []);
+```
+
+---
+
+### ८-ख.६ File Transfer (Client-side)
+
+```js
+// File Upload (Browser → Server)
+const fileInput = document.getElementById('file-input');
+const file = fileInput.files[0];
+
+await dolphin.pubFile(
+  'user-upload-001',     // fileId (unique)
+  file,                  // Blob | ArrayBuffer | Uint8Array
+  file.name,             // filename (optional)
+  (progress) => {        // progress callback 0-100
+    console.log(`Upload: ${progress}%`);
+    progressBar.style.width = progress + '%';
+  }
+);
+
+// File Download (Server → Client)
+dolphin.subscribe('file/download/response', (chunk) => {
+  // Chunk data आउँछ
+});
+dolphin.subFile('monthly-report-2026');  // chunk 0 बाट
+
+// Partial download resume
+dolphin.resumeFile('monthly-report-2026');
+
+// Progress save/load
+dolphin.saveFileProgress('monthly-report-2026', 42);  // chunk 42 सम्म downloaded
+
+// Signals (WebRTC को लागि)
+dolphin.onSignal((signal) => {
+  console.log('Signaling message:', signal);
+});
+dolphin.offSignal(handler);
+
+// New file available notification
+dolphin.onFileAvailable((meta) => {
+  console.log(`New file available: ${meta.name} (${meta.size} bytes)`);
+});
+```
+
+---
+
+### ८-ख.७ Hookless DOM — JavaScript नलेखीकनै UI
+
+`DolphinClient` ले HTML `data-*` attributes मार्फत automatic API calls र realtime binding गर्छ।
+
+**Form Submit → API:**
+```html
+<!-- Login form — JavaScript छैन! -->
+<form data-api-submit="POST /api/auth/login" 
+      data-api-redirect="/dashboard">
+  <input type="email"    name="email"    placeholder="Email" />
+  <input type="password" name="password" placeholder="Password" />
+  <button type="submit">Login</button>
+</form>
+
+<!-- Register form -->
+<form data-api-submit="POST /api/auth/register" 
+      data-api-redirect="/welcome">
+  <input name="email"    required />
+  <input name="password" required />
+  <button>Register</button>
+</form>
+
+<!-- Product create form -->
+<form data-api-submit="POST /api/products"
+      data-api-reload="true">
+  <input name="title" placeholder="Product name" />
+  <input name="price" type="number" />
+  <button>थप्नुहोस्</button>
+</form>
+```
+
+**Button Click → API:**
+```html
+<!-- Logout button -->
+<button data-api-click="POST /api/auth/logout"
+        data-api-redirect="/login">
+  Logout
+</button>
+
+<!-- Delete product -->
+<button data-api-click="DELETE /api/products/{{id}}"
+        data-api-reload="true">
+  Delete
+</button>
+
+<!-- API result DOM मा राख्ने -->
+<button data-api-click="GET /api/auth/me"
+        data-api-result="userProfile">
+  Load Profile
+</button>
+<div id="userProfile"></div>
+```
+
+**Realtime DOM Binding:**
+```html
+<!-- Array list — Loop automatically -->
+<ul data-api-get="/api/products"
+    data-rt-bind="/api/products"
+    data-rt-template="<li>{{title}} — रु.{{price}}</li>">
+</ul>
+<!-- Server ले rt.publish('products/update', [...]) गर्दा list automatically update -->
+
+<!-- Context binding — nested data -->
+<div data-rt-bind="auth/user" data-rt-type="context">
+  <img data-rt-attr="src:avatarUrl, alt:name" />
+  <h2>स्वागत छ, <span data-rt-text="name"></span>!</h2>
+  <p data-rt-html="bio"></p>
+  
+  <!-- Conditional show/hide -->
+  <button data-rt-if="isAdmin">Admin Panel</button>
+  <p data-rt-hide="isVerified">Email verify गर्नुहोस्!</p>
+</div>
+```
+
+**Realtime Input Push:**
+```html
+<!-- Input type हुँदा realtime publish हुन्छ -->
+<input type="text"
+       name="search"
+       data-rt-push="search/query"
+       placeholder="खोज्नुहोस्..." />
+<!-- rt.subscribe('search/query', ...) ले server मा receive गर्छ -->
+```
+
+**Form → Realtime Publish:**
+```html
+<!-- Form submit → WebSocket publish (API होइन) -->
+<form data-rt-submit="chat/room1">
+  <input name="message" placeholder="Message..." />
+  <input name="from"    value="Ram" type="hidden" />
+  <button>Send</button>
+</form>
+```
+
+**Dynamic Payload with Context:**
+```html
+<div data-rt-bind="user/profile" data-rt-type="context">
+  <!-- {{id}} context बाट automatically fill हुन्छ -->
+  <button data-rt-click="user/{{id}}/like"
+          data-rt-payload='{"action":"like","targetId":"{{id}}"}'>
+    Like
+  </button>
+</div>
+```
+
+**DOM Initialization:**
+```html
+<script type="module">
+  import { DolphinClient } from '/node_modules/dolphin-client/dist/index.js';
+
+  // DolphinClient create भएपछि DOM binding automatically active हुन्छ
+  window.dolphin = new DolphinClient('http://localhost:3000', 'page-user', {
+    autoConnect: true
+  });
+</script>
 ```
 
 ---
