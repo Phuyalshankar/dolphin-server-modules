@@ -13,8 +13,11 @@
 ## 📘 Official Guides (Nepali)
 
 - **[Full Tutorial - Nepali (TUTORIAL_NEPALI.md)](./TUTORIAL_NEPALI.md)** — सम्पूर्ण Tutorial नेपालीमा
-- **[Dolphin Master Guide (PDF)](./DOLPHIN_MASTER_GUIDE_NEPALI.pdf)** — Offline PDF guide
+- **[English Tutorial (TUTORIAL.md)](./TUTORIAL.md)** — Complete tutorial in English (v2.14.1)
+- **[Realtime Tutorial - Nepali (RT_TUTORIAL_NEPALI.md)](./RT_TUTORIAL_NEPALI.md)** — RealtimeCore v2 WebSocket deep dive
+- **[AI Tutorial - Nepali (AI_TUTORIAL_NEPALI.md)](./AI_TUTORIAL_NEPALI.md)** — AI Agent & dolphin chat guide
 - **[Client Tutorial - Nepali](./CLIENT_TUTORIAL_NEPALI.md)** — Frontend client tutorial
+- **[Dolphin Master Guide (PDF)](./DOLPHIN_MASTER_GUIDE_NEPALI.pdf)** — Offline PDF guide
 
 ---
 
