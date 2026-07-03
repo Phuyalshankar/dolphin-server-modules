@@ -15,7 +15,7 @@ if (!process.env.JEST_WORKER_ID) {
     .catch(() => {});
 }
 
-export function createDolphinServer(options: { port?: number; host?: string, realtime?: any } = {}) {
+export function createDolphinServer(options: { port?: number; host?: string, realtime?: any, allowedWebSocketPaths?: string[] } = {}) {
   const router = createDolphinRouter();
 
   // Automatically serve the client library (populated async from ESM-only helper)
@@ -200,8 +200,16 @@ export function createDolphinServer(options: { port?: number; host?: string, rea
   // --- WebSocket Upgrade Handling ---
   server.on('upgrade', (request, socket, head) => {
     const { pathname } = new URL(request.url!, `http://${request.headers.host}`);
+    const allowedPaths = options.allowedWebSocketPaths || ['/phone', '/realtime'];
     
-    if (pathname === '/phone' || pathname === '/realtime') {
+    const isAllowed = allowedPaths.some((p: string) => {
+      if (p.endsWith('/*')) {
+        return pathname.startsWith(p.slice(0, -2));
+      }
+      return pathname === p;
+    });
+
+    if (isAllowed) {
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit('connection', ws, request);
       });
@@ -212,7 +220,8 @@ export function createDolphinServer(options: { port?: number; host?: string, rea
 
   if (options.realtime) {
     wss.on('connection', (ws, request) => {
-      const deviceId = new URL(request.url!, `http://h`).searchParams.get('deviceId') || 'anonymous';
+      const urlObj = new URL(request.url!, `http://h`);
+      const deviceId = urlObj.searchParams.get('deviceId') || urlObj.searchParams.get('id') || 'anonymous';
 
       options.realtime.register(deviceId, ws);
 
