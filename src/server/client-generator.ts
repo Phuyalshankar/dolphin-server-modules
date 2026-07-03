@@ -63,75 +63,123 @@ class DolphinClient {
     return response.json();
   }
 
-  connectRealtime(onMessage) {
+  connectRealtime(onMessage, topics = []) {
     this.realtimeCallbacks.add(onMessage);
     const deviceId = 'web_' + Math.random().toString(36).substring(2, 10);
     const token = this.getToken();
     const tokenParam = token ? '&token=' + encodeURIComponent(token) : '';
+    const topicsArr = Array.isArray(topics) ? topics : [topics];
     
-    // Attempt WebSocket first if browser supports it
-    if (typeof window !== 'undefined' && window.WebSocket) {
+    let ws = null;
+    let queuedSubs = [];
+    const activeSubs = new Set(topicsArr);
+
+    const sendMsg = (msg) => {
+      if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify(msg));
+      } else {
+        queuedSubs.push(msg);
+      }
+    };
+
+    const subscribe = (topic) => {
+      activeSubs.add(topic);
+      sendMsg({ type: 'sub', topic });
+    };
+
+    const unsubscribe = (topic) => {
+      activeSubs.delete(topic);
+      sendMsg({ type: 'unsub', topic });
+    };
+
+    // Pre-queue initial subscriptions
+    topicsArr.forEach(topic => {
+      queuedSubs.push({ type: 'sub', topic });
+    });
+
+    const wsConstructor = (typeof window !== 'undefined' ? window.WebSocket : (typeof globalThis !== 'undefined' ? globalThis.WebSocket : null));
+    if (wsConstructor) {
       const wsProto = this.baseUrl.startsWith('https') ? 'wss://' : 'ws://';
       const wsUrl = this.baseUrl.replace(/^https?:\\/\\//, wsProto) + '/realtime?deviceId=' + deviceId + tokenParam;
       
       try {
-        const ws = new window.WebSocket(wsUrl);
+        ws = new wsConstructor(wsUrl);
         this.wsConnection = ws;
         
         ws.onopen = () => {
           console.log('[DolphinClient] WebSocket connected');
+          // Send all queued subscriptions
+          while (queuedSubs.length > 0) {
+            const msg = queuedSubs.shift();
+            ws.send(JSON.stringify(msg));
+          }
         };
         
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            this.realtimeCallbacks.forEach(cb => cb(data));
+            const payload = data.payload !== undefined ? data.payload : data;
+            this.realtimeCallbacks.forEach(cb => cb(payload));
           } catch {}
         };
         
         ws.onerror = () => {
-          this._fallbackToSSE();
+          this._fallbackToSSE(activeSubs);
         };
         
         ws.onclose = () => {
-          this._fallbackToSSE();
+          this._fallbackToSSE(activeSubs);
         };
         
-        return () => {
+        const closeFn = () => {
           this.realtimeCallbacks.delete(onMessage);
           if (this.wsConnection) {
             this.wsConnection.close();
           }
         };
+        closeFn.subscribe = subscribe;
+        closeFn.unsubscribe = unsubscribe;
+        return closeFn;
       } catch (err) {
-        this._fallbackToSSE();
+        this._fallbackToSSE(activeSubs);
       }
     } else {
-      this._fallbackToSSE();
+      this._fallbackToSSE(activeSubs);
     }
 
-    return () => {
+    const fallbackCloseFn = () => {
       this.realtimeCallbacks.delete(onMessage);
       if (this.sseConnection) {
         this.sseConnection.close();
       }
     };
+    fallbackCloseFn.subscribe = subscribe;
+    fallbackCloseFn.unsubscribe = unsubscribe;
+    return fallbackCloseFn;
   }
 
-  _fallbackToSSE() {
+  _fallbackToSSE(activeSubs) {
     if (this.sseConnection || this.wsConnection?.readyState === 1) return;
     
+    const sseConstructor = (typeof window !== 'undefined' ? window.EventSource : (typeof globalThis !== 'undefined' ? globalThis.EventSource : null));
+    if (!sseConstructor) {
+      console.warn('[DolphinClient] EventSource is not supported in this environment');
+      return;
+    }
+
     console.log('[DolphinClient] Falling back to SSE (Server-Sent Events)');
     const token = this.getToken();
     const tokenParam = token ? '?token=' + encodeURIComponent(token) : '';
-    const sseUrl = this.baseUrl + '/realtime/sse' + tokenParam;
-    const sse = new EventSource(sseUrl);
+    const topicsList = activeSubs && activeSubs.size > 0 ? '&topics=' + encodeURIComponent(Array.from(activeSubs).join(',')) : '';
+    const sseUrl = this.baseUrl + '/realtime/sse' + tokenParam + topicsList;
+    const sse = new sseConstructor(sseUrl);
     this.sseConnection = sse;
     
     sse.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        this.realtimeCallbacks.forEach(cb => cb(data));
+        const payload = data.payload !== undefined ? data.payload : data;
+        this.realtimeCallbacks.forEach(cb => cb(payload));
       } catch {}
     };
   }

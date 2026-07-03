@@ -14,6 +14,7 @@ export declare function createDolphinServer(options?: {
     host?: string;
     realtime?: any;
     allowedWebSocketPaths?: string[];
+    autoReactive?: boolean;
 }): {
     http: http.Server<typeof http.IncomingMessage, typeof http.ServerResponse>;
     wss: LazyWebSocketServer;

@@ -67,8 +67,24 @@ if (!process.env.JEST_WORKER_ID) {
     .catch(() => {});
 }
 
-export function createDolphinServer(options: { port?: number; host?: string, realtime?: any, allowedWebSocketPaths?: string[] } = {}) {
+function getCollectionName(pathname: string): string | null {
+  const segments = pathname.split('/').filter(Boolean);
+  if (segments.length === 0) return null;
+  
+  let idx = 0;
+  if (['api', 'v1', 'v2', 'v3'].includes(segments[idx].toLowerCase())) {
+    idx++;
+  }
+  
+  if (idx < segments.length) {
+    return segments[idx].replace(/[^a-zA-Z0-9_]/g, '_');
+  }
+  return null;
+}
+
+export function createDolphinServer(options: { port?: number; host?: string, realtime?: any, allowedWebSocketPaths?: string[], autoReactive?: boolean } = {}) {
   const router = createDolphinRouter();
+  const isAutoReactive = options.autoReactive !== false;
 
   const authorizeGen = (ctx: any, next: () => void) => {
     const secretKey = process.env.DOLPHIN_GENERATE_KEY;
@@ -108,6 +124,37 @@ export function createDolphinServer(options: { port?: number; host?: string, rea
       } else {
         res.end(String(data));
       }
+
+      // --- Dolphin Auto-Reactive Broadcasts ---
+      if (
+        isAutoReactive &&
+        options.realtime &&
+        ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) &&
+        finalStatus >= 200 &&
+        finalStatus < 300 &&
+        (!ctx || ctx.state.noReactive !== true)
+      ) {
+        const collection = getCollectionName(parsedUrl.pathname);
+        if (collection && collection !== 'dolphin_client_js' && collection !== 'dolphin_client_d_ts') {
+          let action = 'update';
+          if (req.method === 'POST') action = 'create';
+          if (req.method === 'DELETE') action = 'delete';
+
+          try {
+            options.realtime.publish(collection, {
+              collection,
+              action,
+              method: req.method,
+              path: parsedUrl.pathname,
+              data: data,
+              timestamp: Date.now()
+            });
+          } catch (err: any) {
+            console.error('[DolphinReactive] Auto-broadcast failed:', err.message);
+          }
+        }
+      }
+
       pendingStatus = 200; // Reset after send
     };
 
@@ -159,6 +206,24 @@ export function createDolphinServer(options: { port?: number; host?: string, rea
         };
 
         options.realtime.register(deviceId, sseSocket);
+
+        // --- SSE Auto-subscription to topics ---
+        const topicsArg = parsedUrl.searchParams.get('topics');
+        if (topicsArg) {
+          topicsArg.split(',').forEach((topic) => {
+            options.realtime.subscribe(topic, (payload: any, matchedTopic: string) => {
+              if (!res.writableEnded) {
+                sseSocket.send({ topic: matchedTopic || topic, payload });
+              }
+            }, deviceId);
+          });
+        } else {
+          options.realtime.subscribe('*', (payload: any, matchedTopic: string) => {
+            if (!res.writableEnded) {
+              sseSocket.send({ topic: matchedTopic, payload });
+            }
+          }, deviceId);
+        }
         
         req.on('close', () => {
           options.realtime.unregister(deviceId);
