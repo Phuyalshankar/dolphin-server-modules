@@ -1,4 +1,4 @@
-﻿# 🐬 Dolphin Server Modules — सम्पूर्ण Tutorial (नेपालीमा)
+# 🐬 Dolphin Server Modules — सम्पूर्ण Tutorial (नेपालीमा)
 **Version: 2.14.1 | Production-Ready Guide | 100% Nepali**
 
 ---
@@ -337,6 +337,12 @@ npx dolphin chat                        # Interactive AI agent (file read/write/
 npx dolphin status                      # Project health check
 npx dolphin deploy                      # PM2 deployment guide
 npx dolphin serve [--port=N]            # TCP port test server
+
+# ─── Client SDK Generator ───────────────────────────
+npx dolphin generate-client --url=http://localhost:3000 --out=./dolphin-client.js --key=your_secret
+                                        # Auto-generated client SDK बनाउँछ
+                                        # → dolphin-client.js  (browser SDK)
+                                        # → dolphin-client.d.ts (TypeScript types)
 
 # ─── Info ──────────────────────────────────────────
 npx dolphin --version                   # 🐬 Dolphin CLI v2.14.1
@@ -1128,6 +1134,29 @@ rt.use(myProtocol);
 
 ### ८.१३ Raw WebSocket Protocol (Browser — no library)
 
+#### JWT Authentication (WebSocket)
+
+WebSocket connection मा JWT token `&token=` query parameter मार्फत पठाउन सकिन्छ। Server ले token verify गर्छ — invalid वा expired token भएमा connection तुरुन्त disconnect हुन्छ।
+
+```js
+// JWT सहित connect (authenticated realtime)
+const token = localStorage.getItem('access_token'); // Login पछि पाएको JWT
+const ws = new WebSocket(
+  `ws://localhost:3000/realtime?deviceId=browser-001&token=${token}`
+);
+// ⚠️ Token invalid वा expire भएमा server ले disconnect गर्छ
+```
+
+#### SSE Fallback
+
+यदि WebSocket support नभए वा blocked भए, client स्वतः **Server-Sent Events (SSE)** मा fall back गर्छ। `DolphinClient` library ले यो automatically handle गर्छ।
+
+```
+GET /realtime/sse?deviceId=browser-001&token=JWT_TOKEN
+```
+
+#### Raw WebSocket (बिना library)
+
 ```js
 const ws = new WebSocket('ws://localhost:3000/realtime?deviceId=browser-001');
 
@@ -1220,6 +1249,38 @@ await dolphin.connect();
 // Disconnect
 dolphin.disconnect();
 ```
+
+#### Auto-Generated SDK (CLI बाट बनाइएको)
+
+`npx dolphin generate-client` command ले `dolphin-client.js` र `dolphin-client.d.ts` generate गर्छ। यो auto-generated SDK directly import गर्न सकिन्छ:
+
+```html
+<!-- Browser मा auto-generated SDK use गर्ने -->
+<script src="./dolphin-client.js"></script>
+```
+
+```js
+// ESM / TypeScript मा
+import { DolphinClient } from './dolphin-client.js';
+// TypeScript types: dolphin-client.d.ts automatically picked up
+```
+
+#### Topic Subscriptions सँग Realtime Connect
+
+Realtime connect गर्दा specific topics को list पठाउन सकिन्छ। Server ले ती topics मा आउने messages मात्र client लाई पठाउँछ।
+
+```js
+// Topic list सहित connect
+await client.connectRealtime(
+  (message) => {
+    // message = { action: 'create'|'update'|'delete', data: {...}, topic: 'todos' }
+    console.log(`[${message.topic}] ${message.action}:`, message.data);
+  },
+  ['todos', 'notifications', 'chat/room1']  // Subscribe गर्ने topics
+);
+```
+
+> **SSE Fallback:** WebSocket connect हुन नसकेमा `DolphinClient` स्वतः SSE (`/realtime/sse?deviceId=...&token=...`) मा fall back गर्छ — code मा कुनै परिवर्तन चाहिँदैन।
 
 ---
 
@@ -1948,7 +2009,12 @@ ENCRYPTION_KEY=another_different_secret_key_for_2fa_data
 REDIS_URL=redis://localhost:6379
 APP_URL=https://myapp.com
 FRONTEND_URL=https://myfrontend.com
+
+# Client SDK Generator — generate-client command को लागि secret key
+DOLPHIN_GENERATE_KEY=your_secret_key
 ```
+
+> **`DOLPHIN_GENERATE_KEY`**: यो key बिना `/dolphin-client.js` endpoint `403 Forbidden` फर्काउँछ। सधैं गोप्य राख्नुहोस् र `npx dolphin generate-client --key=` मा pass गर्नुहोस्।
 
 **⚠️ `.env` file `.gitignore` मा राख्नुहोस्:**
 ```
@@ -2019,6 +2085,7 @@ server {
 - ✅ `NODE_ENV=production`
 - ✅ `JWT_SECRET` minimum 32 random characters
 - ✅ `ENCRYPTION_KEY` set गरेको (2FA को लागि)
+- ✅ `DOLPHIN_GENERATE_KEY` सेट गरिएको छ (SDK generator सुरक्षित)
 - ✅ `.env` file `.gitignore` मा छ
 - ✅ `secureCookies: true` (HTTPS मा deploy भएको)
 - ✅ MongoDB Atlas (वा secure MongoDB setup)

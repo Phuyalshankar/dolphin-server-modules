@@ -152,6 +152,11 @@ npx dolphin status                      # Project health check
 npx dolphin deploy                      # PM2 deployment guide
 npx dolphin serve [--port=N]            # TCP port test server
 
+# ─── SDK Generation ─────────────────────────────────────────
+npx dolphin generate-client --url=http://localhost:4000 --out=./src/dolphin-client.js --key=YOUR_KEY
+# Generates: dolphin-client.js   (browser-ready SDK)
+#            dolphin-client.d.ts (TypeScript type definitions)
+
 # ─── Info ──────────────────────────────────────────────────
 npx dolphin --version                   # 🐬 Dolphin CLI v2.14.1
 npx dolphin help                        # All commands list
@@ -278,6 +283,8 @@ app.use('/api/products', createCrudRouter(db, 'Product', {
 }));
 ```
 
+> **Reactive Routes (default behavior):** When `autoReactive: true` (the default), `POST`, `PUT`, and `DELETE` routes automatically broadcast a realtime event to all connected clients. The broadcast topic is derived from the route URL — for example, `/api/todos` becomes the `todos` topic. To opt out on a per-request basis, set `ctx.state.noReactive = true` inside your handler.
+
 | Method | Endpoint | Action |
 |--------|----------|--------|
 | GET | `/api/products` | List all (with pagination) |
@@ -352,7 +359,9 @@ rt.subPull('sensors/temp', 30);
 **Browser client (no library):**
 
 ```js
-const ws = new WebSocket('ws://localhost:3000/realtime?deviceId=browser-001');
+// Include a JWT token for authenticated realtime connections:
+const ws = new WebSocket('ws://localhost:3000/realtime?deviceId=browser-001&token=JWT_TOKEN');
+// The server verifies the token and associates the connection with the authenticated user.
 
 ws.onopen = () => {
   // Subscribe to a topic
@@ -373,6 +382,12 @@ ws.onmessage = (event) => {
   }
 };
 ```
+
+> **SSE Fallback:** If WebSocket is unavailable (e.g., blocked by a corporate firewall), the client automatically falls back to Server-Sent Events:
+> ```
+> GET /realtime/sse?deviceId=browser-001&token=JWT_TOKEN
+> ```
+> The `DolphinClient` SDK handles this fallback transparently — no code changes required.
 
 For a full Realtime guide, see **[RT_TUTORIAL_NEPALI.md](./RT_TUTORIAL_NEPALI.md)**.
 
@@ -407,6 +422,41 @@ dolphin.subscribe('chat/room1', (payload) => {
 });
 dolphin.publish('chat/room1', { message: 'Hello!', from: user.email });
 ```
+
+### connectRealtime with Topic Subscriptions
+
+To subscribe to specific topics as soon as the realtime connection opens, pass a topic array as the second argument:
+
+```js
+dolphin.connectRealtime(
+  (event) => {
+    console.log('Realtime event:', event.topic, event.payload);
+  },
+  ['todos', 'chat/room1', 'notifications'] // topic filter list
+);
+```
+
+Only events matching the listed topics are delivered to the callback. Omit the array to receive all events.
+
+> **SSE Fallback:** If the WebSocket connection cannot be established, `DolphinClient` automatically retries via Server-Sent Events (`/realtime/sse?deviceId=...&token=...`). Your `connectRealtime` callback works identically over both transports.
+
+### Using the Auto-Generated SDK
+
+If you generated a client SDK with `npx dolphin generate-client` (see [Section 3](#3-cli-commands)), you can include it directly in any HTML page — no npm required:
+
+```html
+<!-- Include the auto-generated SDK -->
+<script src="./dolphin-client.js"></script>
+<script>
+  const dolphin = new DolphinClient('http://localhost:4000', 'browser-001');
+  dolphin.connectRealtime(
+    (event) => console.log('Live update:', event),
+    ['todos']
+  );
+</script>
+```
+
+The accompanying `dolphin-client.d.ts` provides full TypeScript IntelliSense when imported in a TypeScript project.
 
 **Hookless DOM (no JavaScript needed):**
 
@@ -656,13 +706,17 @@ JWT_SECRET=<minimum 32 random characters — use openssl rand -hex 32>
 ENCRYPTION_KEY=<32 char key for 2FA>
 REDIS_URL=redis://localhost:6379
 FRONTEND_URL=https://your-frontend.com
+DOLPHIN_GENERATE_KEY=your_sdk_generation_secret_key
 ```
+
+> **`DOLPHIN_GENERATE_KEY`**: Secures the `/dolphin/generate-client` download endpoint. If this variable is not set or an incorrect key is provided, the endpoint returns `403 Forbidden`. Set it to a long random secret and pass it as the `--key` flag when running `npx dolphin generate-client`.
 
 ### Production Checklist
 
 - ✅ `NODE_ENV=production`
 - ✅ `JWT_SECRET` minimum 32 random characters
 - ✅ `ENCRYPTION_KEY` set (for 2FA)
+- ✅ `DOLPHIN_GENERATE_KEY` set (SDK generator endpoint secured)
 - ✅ `.env` in `.gitignore`
 - ✅ `secureCookies: true` (HTTPS deployed)
 - ✅ MongoDB Atlas or secure MongoDB

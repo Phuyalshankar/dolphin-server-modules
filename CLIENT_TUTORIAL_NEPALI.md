@@ -144,3 +144,151 @@ Context Binding सँगै हामीले React/Vue जस्तै सर
 ---
 
 **बधाई छ! 🎉** अब तपाईंले Dolphin Client को "Stateless" आर्किटेक्चर प्रयोग गरेर विना कुनै झन्झटिलो JavaScript कोड, एकदमै छिटो र रियलटाइम वेब एप्लिकेसन बनाउन सक्नुहुन्छ!
+
+---
+
+## ६. Auto-Generated Client SDK (स्वचालित Client SDK बनाउने)
+
+Dolphin Framework ले तपाईंको API अनुसार स्वचालित रूपमा एउटा JavaScript Client SDK बनाइदिन्छ। यसले गर्दा तपाईंले API कल गर्न म्यानुअल `fetch` लेख्नु पर्दैन।
+
+### SDK डाउनलोड गर्ने तरिका (CLI प्रयोग गरेर)
+
+तलको कमाण्ड चलाउनुहोस्:
+
+```bash
+npx dolphin generate-client --url=http://localhost:4000 --out=./dolphin-client.js --key=your_key
+```
+
+* **`--url`**: तपाईंको Dolphin सर्भरको ठेगाना।
+* **`--out`**: SDK फाइल कहाँ सेभ गर्ने।
+* **`--key`**: सुरक्षाका लागि सिक्रेट Key (तलको `DOLPHIN_GENERATE_KEY` सेक्सन हेर्नुहोस्)।
+
+यो कमाण्ड चलाएपछि दुईवटा फाइलहरू बन्छन्:
+* **`dolphin-client.js`**: मुख्य SDK फाइल।
+* **`dolphin-client.d.ts`**: TypeScript प्रयोगकर्ताहरूका लागि Type Definitions।
+
+### HTML मा SDK प्रयोग गर्ने
+
+```html
+<!-- SDK लोड गर्नुहोस् -->
+<script src="./dolphin-client.js"></script>
+
+<script>
+  // SDK आफैं सर्भरसँग कनेक्ट हुन्छ
+  const todos = await client.api.todos.get();
+  console.log(todos);
+</script>
+```
+
+*`client.api.todos.get()` ले `/api/todos` मा GET request पठाउँछ — बिल्कुल सरल!*
+
+---
+
+## ७. DOLPHIN_GENERATE_KEY (SDK सुरक्षा Key)
+
+Auto-Generated SDK डाउनलोड एन्डपोइन्ट सुरक्षित गर्न `.env` फाइलमा `DOLPHIN_GENERATE_KEY` सेट गर्नुहोस्।
+
+```env
+DOLPHIN_GENERATE_KEY=your_secret
+```
+
+> **महत्त्वपूर्ण:** यदि `DOLPHIN_GENERATE_KEY` सेट गरिएको छैन वा गलत Key पठाइयो भने, SDK डाउनलोड गर्ने बेलामा सर्भरले **`403 Forbidden`** त्रुटि फर्काउँछ। यो Key सधैं गोप्य राख्नुहोस् र सर्वजनिक नगर्नुहोस्।
+
+---
+
+## ८. JWT Realtime Auth (JWT प्रमाणीकरण)
+
+Dolphin को Realtime WebSocket कनेक्सनलाई JWT (JSON Web Token) प्रयोग गरेर सुरक्षित गर्न सकिन्छ। यसले सुनिश्चित गर्छ कि केवल अधिकृत (Authorized) प्रयोगकर्ताहरू मात्र Realtime च्यानलमा कनेक्ट हुन सक्छन्।
+
+### कसरी कनेक्ट गर्ने
+
+JWT Token लाई WebSocket URL मा Query Parameter को रूपमा पठाउनुहोस्:
+
+```javascript
+dolphin.connect('ws://localhost:4000/realtime?deviceId=abc&token=JWT_TOKEN');
+```
+
+* **`deviceId`**: यस उपकरण (Device) को अद्वितीय पहिचान।
+* **`token`**: सर्भरले जारी गरेको JWT Token।
+
+### सर्भरमा के हुन्छ?
+
+सर्भरले Token प्राप्त गरेपछि यसको वैधता (Validity) जाँच गर्छ। यदि Token गलत छ वा म्याद सकिएको छ भने, सर्भरले त्यो क्लाइन्टलाई तुरुन्तै **Disconnect** गरिदिन्छ।
+
+---
+
+## ९. Reactive Routes (HTTP-देखि-RT स्वचालित Broadcasting)
+
+Reactive Routes Dolphin को एउटा शक्तिशाली सुविधा हो जसले HTTP र Realtime लाई एकसाथ जोड्छ। यसले `POST`, `PUT`, र `DELETE` अनुरोधहरू आएपछि **स्वचालित रूपमा** सम्बन्धित Realtime Topic मा डाटा Broadcast गर्छ।
+
+### फाइदा के हो?
+
+तपाईंले Backend मा अलग्गै Realtime Broadcast कोड लेख्नु पर्दैन! Dolphin ले आफैं सम्हाल्छ।
+
+**उदाहरण:** कसैले `POST /api/todos` मा नयाँ Todo थप्यो भने, Dolphin ले आफैं `todos` Topic मा सबै जोडिएका Clients लाई नयाँ डाटाको सूचना पठाउँछ।
+
+### Reactive Broadcasting बन्द गर्ने (Opt-out)
+
+यदि कुनै विशेष Route मा यो सुविधा चाहिँदैन भने, Context State मा `noReactive` सेट गर्नुहोस्:
+
+```javascript
+// यो Route मा Broadcasting हुनेछैन
+ctx.state.noReactive = true;
+```
+
+---
+
+## १०. SSE Fallback (WebSocket नभए SSE प्रयोग गर्ने)
+
+कहिलेकाहीं नेटवर्क वा प्रोक्सी (Proxy) कारणले WebSocket कनेक्सन काम नगर्न सक्छ। यस्तो अवस्थामा Dolphin Client ले **स्वचालित रूपमा** Server-Sent Events (SSE) मा फिर्ता (Fallback) हुन्छ।
+
+### SSE कसरी काम गर्छ?
+
+यो प्रक्रिया पूर्णतः पारदर्शी (Transparent) छ — तपाईंले कुनै थप कोड लेख्नु पर्दैन। Client ले पहिले WebSocket जडान गर्न खोज्छ, र त्यो असफल भएमा SSE मार्फत डाटा प्राप्त गर्छ।
+
+### SSE Endpoint
+
+```
+/realtime/sse?deviceId=abc&token=JWT_TOKEN
+```
+
+* **`deviceId`**: उपकरणको अद्वितीय पहिचान।
+* **`token`**: JWT प्रमाणीकरण Token (आवश्यक भएमा)।
+
+---
+
+## ११. Topic Subscriptions (विशेष Topic सुन्ने)
+
+Dolphin Realtime मा एक साथ सबै सन्देशहरू सुन्नुको सट्टा, तपाईं केवल **आफूलाई चाहिने Topic हरू** मात्र सुन्न (Subscribe गर्न) सक्नुहुन्छ।
+
+### विशेष Topic हरूमा जडान गर्ने
+
+```javascript
+// 'todos' र 'chat' Topic मात्र सुन्ने
+client.connectRealtime(onMessage, ['todos', 'chat']);
+```
+
+* पहिलो Argument `onMessage`: सन्देश आउँदा चलाइने Callback Function।
+* दोस्रो Argument `['todos', 'chat']`: सुन्नु पर्ने Topic हरूको सूची।
+
+### सन्देशको ढाँचा (Message Format)
+
+Realtime मार्फत आउने सन्देशहरू तलको ढाँचामा हुन्छन्:
+
+```json
+{
+  "action": "create",
+  "data": { "id": 1, "title": "नयाँ काम" },
+  "topic": "todos"
+}
+```
+
+| Field    | विवरण                                          |
+| -------- | ---------------------------------------------- |
+| `action` | के भयो: `create`, `update`, वा `delete`       |
+| `data`   | परिवर्तन भएको डाटाको विवरण                   |
+| `topic`  | कुन Topic बाट सन्देश आयो (जस्तै: `todos`)    |
+
+---
+
+**बधाई छ! 🎉** अब तपाईंले Dolphin Framework का नयाँ र शक्तिशाली सुविधाहरू — Auto SDK, JWT Auth, Reactive Routes, SSE Fallback, र Topic Subscriptions — सबै बुझ्नुभयो। यी सुविधाहरू प्रयोग गरेर झन् बढी सुरक्षित, छिटो र स्केलेबल वेब एप्लिकेसन बनाउनुहोस्!
