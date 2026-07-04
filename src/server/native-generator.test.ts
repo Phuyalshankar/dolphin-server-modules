@@ -1,4 +1,5 @@
-import { generateClientJS } from './client-generator.js';
+import { generateClientJS, generateClientDTS } from './client-generator.js';
+
 
 describe('Dolphin Client SDK Native Platform Generator', () => {
   const mockRoutes = [
@@ -21,4 +22,13 @@ describe('Dolphin Client SDK Native Platform Generator', () => {
     expect(code).toContain('sync(app)');
     expect(code).toContain('intercom/calls');
   });
+
+  test('should generate native platform DTS typings with DolphinNativeSync export when platform is native', () => {
+    const dts = generateClientDTS(mockRoutes, 'native');
+    expect(dts).toContain('export class DolphinClient');
+    expect(dts).toContain('export class DolphinNativeSync');
+    expect(dts).toContain('sync(app: any): void');
+    expect(dts).toContain('disconnect(): void');
+  });
 });
+

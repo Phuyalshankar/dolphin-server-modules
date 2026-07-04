@@ -357,7 +357,7 @@ class DolphinNativeSync {
   return generatedCode;
 }
 
-export function generateClientDTS(routes: any[]): string {
+export function generateClientDTS(routes: any[], platform?: string): string {
   const tree: any = {};
 
   for (const r of routes) {
@@ -425,6 +425,19 @@ export function generateClientDTS(routes: any[]): string {
   }
 
   const dtsBody = serializeTree(tree, '');
+  const isNative = platform === 'native';
+
+  const nativeSyncDTS = `
+export class DolphinNativeSync {
+  client: DolphinClient;
+  deviceId: string;
+  app: any;
+  stopFn: any;
+  constructor(baseUrl: string, deviceId?: string, options?: { token?: string | null });
+  sync(app: any): void;
+  disconnect(): void;
+}
+`;
 
   const dtsCode = `
 export class DolphinClient {
@@ -442,7 +455,10 @@ export class DolphinClient {
 export interface DolphinClient ${dtsBody}
 
 export const client: DolphinClient;
+
+${isNative ? nativeSyncDTS : ''}
 `;
 
   return dtsCode.trim();
 }
+
