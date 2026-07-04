@@ -340,6 +340,7 @@ async function run() {
             const urlArg = args.find(a => a.startsWith('--url='))?.split('=')[1] || 'http://localhost:3000';
             const outArg = args.find(a => a.startsWith('--out='))?.split('=')[1] || './dolphin-client.js';
             const keyArg = args.find(a => a.startsWith('--key='))?.split('=')[1] || '';
+            const platformArg = args.find(a => a.startsWith('--platform='))?.split('=')[1] || 'web';
 
             CLIUI.heading('Generating Dolphin Client SDK');
             CLIUI.startSpinner(`Fetching schema from ${urlArg}...`);
@@ -348,7 +349,9 @@ async function run() {
                 const fetchUrlJS = urlArg.replace(/\/$/, '') + '/dolphin-client.js';
                 const fetchUrlDTS = urlArg.replace(/\/$/, '') + '/dolphin-client.d.ts';
 
-                const headers: Record<string, string> = {};
+                const headers: Record<string, string> = {
+                    'x-dolphin-platform': platformArg
+                };
                 if (keyArg) {
                     headers['x-dolphin-key'] = keyArg;
                 }
@@ -374,6 +377,7 @@ async function run() {
 
                 CLIUI.stopSpinner(true, `SDK & Typings generated successfully!`);
                 CLIUI.success(`Files saved:`);
+
                 console.log(`    📄 JS:  ${path.relative(process.cwd(), outPathJS)}`);
                 console.log(`    📄 DTS: ${path.relative(process.cwd(), outPathDTS)}`);
             } catch (e: any) {

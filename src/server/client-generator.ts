@@ -1,4 +1,4 @@
-export function generateClientJS(routes: any[]): string {
+export function generateClientJS(routes: any[], platform?: string): string {
   const coreCode = `
 class DolphinClient {
   constructor(baseUrl) {
@@ -36,29 +36,44 @@ class DolphinClient {
       'Content-Type': 'application/json',
       ...options.headers
     };
+
     const token = this.getToken();
     if (token) {
       headers['Authorization'] = 'Bearer ' + token;
     }
 
-    const fetchOpts = {
+    const fetchConstructor = (typeof window !== 'undefined' ? window.fetch : (typeof globalThis !== 'undefined' ? globalThis.fetch : null));
+    if (!fetchConstructor) {
+      throw new Error('[DolphinClient] Fetch is not supported in this environment');
+    }
+
+    const response = await fetchConstructor(url, {
       method,
       headers,
+      body: body ? JSON.stringify(body) : undefined,
       ...options
-    };
+    });
 
-    if (body) {
-      fetchOpts.body = JSON.stringify(body);
+    if (response.status === 401) {
+      this.setToken(null);
     }
 
-    const response = await fetch(url, fetchOpts);
     if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      const err = new Error(errData.message || 'Request failed');
-      err.status = response.status;
-      err.errors = errData.errors;
+      let err;
+      try {
+        const json = await response.json();
+        err = new Error(json.message || 'Request failed');
+        err.status = response.status;
+        err.errors = json.errors;
+      } catch {
+        err = new Error('Request failed');
+        err.status = response.status;
+      }
       throw err;
     }
+
+    // Handle 204 No Content
+    if (response.status === 204) return null;
 
     return response.json();
   }
@@ -130,11 +145,11 @@ class DolphinClient {
         ws.onclose = () => {
           this._fallbackToSSE(activeSubs);
         };
-        
+
         const closeFn = () => {
           this.realtimeCallbacks.delete(onMessage);
-          if (this.wsConnection) {
-            this.wsConnection.close();
+          if (ws) {
+            ws.close();
           }
         };
         closeFn.subscribe = subscribe;
@@ -246,6 +261,74 @@ class DolphinClient {
 `);
   }
 
+  const isNative = platform === 'native';
+
+  const nativeSyncCode = `
+class DolphinNativeSync {
+  constructor(baseUrl, deviceId, options = {}) {
+    this.client = new DolphinClient(baseUrl);
+    this.client.setToken(options.token || null);
+    this.deviceId = deviceId || 'native_device_' + Math.random().toString(36).substring(2, 10);
+    this.app = null;
+    this.stopFn = null;
+  }
+
+  sync(app) {
+    this.app = app;
+    
+    // Auto sync reactive routes topics to app states
+    this.stopFn = this.client.connectRealtime((msg) => {
+      if (!this.app) return;
+
+      // ─── Intercom State Syncing ───
+      if (msg.topic === 'intercom/calls') {
+        if (msg.action === 'invite') {
+          this.app.state('call_state', 'RINGING');
+          this.app.state('active_call', msg.data);
+        } else if (msg.action === 'accept') {
+          this.app.state('call_state', 'CONNECTED');
+        } else if (msg.action === 'end') {
+          this.app.state('call_state', 'ENDED');
+          this.app.state('active_call', null);
+        }
+        return;
+      }
+
+      // ─── Standard CRUD State Syncing ───
+      const stateName = msg.topic.split('/').pop();
+      let currentData = this.app.getState(stateName);
+      
+      // Auto initialize state if empty or undefined
+      if (currentData === undefined) {
+        currentData = [];
+      }
+
+      if (Array.isArray(currentData)) {
+        if (msg.action === 'create') {
+          currentData.push(msg.data);
+        } else if (msg.action === 'update') {
+          currentData = currentData.map(item => item.id === msg.data.id ? msg.data : item);
+        } else if (msg.action === 'delete') {
+          currentData = currentData.filter(item => item.id !== msg.data.id);
+        }
+        this.app.state(stateName, currentData);
+      } else if (typeof currentData === 'object' && currentData !== null) {
+        if (msg.action === 'update') {
+          this.app.state(stateName, { ...currentData, ...msg.data });
+        }
+      }
+    }, ['api/#', 'intercom/calls']);
+  }
+
+  disconnect() {
+    if (this.stopFn) {
+      this.stopFn();
+      this.stopFn = null;
+    }
+  }
+}
+`;
+
   const generatedCode = `
 (function(global) {
   ${coreCode}
@@ -257,13 +340,16 @@ class DolphinClient {
 
   const client = new DolphinClient();
 
+  ${isNative ? nativeSyncCode : ''}
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { client, DolphinClient };
+    module.exports = { client, DolphinClient${isNative ? ', DolphinNativeSync' : ''} };
   }
   
   if (typeof global !== 'undefined') {
     global.client = client;
     global.DolphinClient = DolphinClient;
+    ${isNative ? 'global.DolphinNativeSync = DolphinNativeSync;' : ''}
   }
 })(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : (typeof global !== 'undefined' ? global : (typeof self !== 'undefined' ? self : this))));
 `;
