@@ -59,6 +59,13 @@ export class WebRTCSignalingOrchestrator {
    * @param ws The WebSocket connection instance.
    */
   handleConnection(peerId: string, ws: WebSocket): void {
+    const existingWs = this.peers.get(peerId);
+    if (existingWs && existingWs !== ws) {
+      console.log(`[Signaling] Replaced duplicate signaling connection for peer: ${peerId}`);
+      try {
+        existingWs.close(3000, 'Replaced by new connection');
+      } catch (e) {}
+    }
     this.peers.set(peerId, ws);
 
     ws.on('message', (rawData: string) => {

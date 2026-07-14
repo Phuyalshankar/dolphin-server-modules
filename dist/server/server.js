@@ -8,20 +8,26 @@ class LazyWebSocketServer extends EventEmitter {
     constructor() {
         super();
     }
+    initPromise = null;
     async init() {
         if (this.realWss)
             return;
-        try {
-            const wsMod = await import('ws');
-            this.realWss = new wsMod.WebSocketServer({ noServer: true });
-            for (const [event, listener] of this.pendingEvents) {
-                this.realWss.on(event, listener);
-            }
-            this.pendingEvents = [];
+        if (!this.initPromise) {
+            this.initPromise = (async () => {
+                try {
+                    const wsMod = await import('ws');
+                    this.realWss = new wsMod.WebSocketServer({ noServer: true });
+                    for (const [event, listener] of this.pendingEvents) {
+                        this.realWss.on(event, listener);
+                    }
+                    this.pendingEvents = [];
+                }
+                catch (err) {
+                    console.warn('⚠️ WebSockets are not supported in this runtime environment.', err);
+                }
+            })();
         }
-        catch (err) {
-            console.warn('⚠️ WebSockets are not supported in this runtime environment.', err);
-        }
+        await this.initPromise;
     }
     on(event, listener) {
         if (this.realWss) {
@@ -293,8 +299,8 @@ export function createDolphinServer(options = {}) {
                     ctx.body = parsed;
                     req.body = parsed;
                 }
-                else if (contentType.includes('application/octet-stream')) {
-                    // Preserve raw Buffer for binary data (PCM audio, file uploads, etc.)
+                else if (contentType.includes('application/octet-stream') || contentType.includes('image/')) {
+                    // Preserve raw Buffer for binary data (PCM audio, file uploads, etc. or images)
                     ctx.body = rawBodyBuffer;
                     req.body = rawBodyBuffer;
                 }

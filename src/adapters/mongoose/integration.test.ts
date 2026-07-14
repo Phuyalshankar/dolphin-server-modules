@@ -49,12 +49,14 @@ beforeAll(async () => {
   });
 
   crud = createCRUD(adapter, { enforceOwnership: false });
-});
+}, 60000);
 
 afterAll(async () => {
   await mongoose.disconnect();
-  await mongod.stop();
-});
+  if (mongod) {
+    await mongod.stop();
+  }
+}, 60000);
 
 beforeEach(async () => {
   await Product.deleteMany({});

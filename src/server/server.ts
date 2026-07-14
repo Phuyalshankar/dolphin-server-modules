@@ -13,18 +13,25 @@ class LazyWebSocketServer extends EventEmitter {
     super();
   }
 
+  private initPromise: Promise<void> | null = null;
+
   private async init() {
     if (this.realWss) return;
-    try {
-      const wsMod = await import('ws');
-      this.realWss = new wsMod.WebSocketServer({ noServer: true });
-      for (const [event, listener] of this.pendingEvents) {
-        this.realWss.on(event, listener);
-      }
-      this.pendingEvents = [];
-    } catch (err) {
-      console.warn('⚠️ WebSockets are not supported in this runtime environment.', err);
+    if (!this.initPromise) {
+      this.initPromise = (async () => {
+        try {
+          const wsMod = await import('ws');
+          this.realWss = new wsMod.WebSocketServer({ noServer: true });
+          for (const [event, listener] of this.pendingEvents) {
+            this.realWss.on(event, listener);
+          }
+          this.pendingEvents = [];
+        } catch (err) {
+          console.warn('⚠️ WebSockets are not supported in this runtime environment.', err);
+        }
+      })();
     }
+    await this.initPromise;
   }
 
   on(event: string | symbol, listener: (...args: any[]) => void): this {
@@ -311,8 +318,8 @@ export function createDolphinServer(options: { port?: number; host?: string, rea
           const parsed = Object.fromEntries(new URLSearchParams(rawBodyBuffer.toString()));
           ctx.body = parsed;
           req.body = parsed;
-        } else if (contentType.includes('application/octet-stream')) {
-          // Preserve raw Buffer for binary data (PCM audio, file uploads, etc.)
+        } else if (contentType.includes('application/octet-stream') || contentType.includes('image/')) {
+          // Preserve raw Buffer for binary data (PCM audio, file uploads, etc. or images)
           ctx.body = rawBodyBuffer;
           req.body = rawBodyBuffer;
         } else {

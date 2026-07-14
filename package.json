@@ -65,6 +65,11 @@
       "default": "./dist/middleware/zod.js"
     },
     "./middleware/zod.js": "./dist/middleware/zod.js",
+    "./middleware/cors": {
+      "types": "./dist/middleware/cors.d.ts",
+      "default": "./dist/middleware/cors.js"
+    },
+    "./middleware/cors.js": "./dist/middleware/cors.js",
     "./adapters/mongoose": {
       "types": "./dist/adapters/mongoose/index.d.ts",
       "default": "./dist/adapters/mongoose/index.js"

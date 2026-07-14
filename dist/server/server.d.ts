@@ -4,6 +4,7 @@ declare class LazyWebSocketServer extends EventEmitter {
     private realWss;
     private pendingEvents;
     constructor();
+    private initPromise;
     private init;
     on(event: string | symbol, listener: (...args: any[]) => void): this;
     emit(event: string | symbol, ...args: any[]): boolean;

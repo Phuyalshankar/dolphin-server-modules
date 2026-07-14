@@ -13,7 +13,7 @@ class LazyWebSocketServer extends EventEmitter {
     if (this.realWss) return;
     try {
       const wsMod = await import('ws');
-      this.realWss = new wsMod.WebSocketServer({ noServer: true });
+      this.realWss = new wsMod.WebSocketServer({ noServer: true, maxPayload: 100 * 1024 * 1024 }); // 100MB max payload
       for (const [event, listener] of this.pendingEvents) {
         this.realWss.on(event, listener);
       }

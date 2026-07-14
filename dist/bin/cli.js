@@ -315,12 +315,15 @@ async function run() {
             const urlArg = args.find(a => a.startsWith('--url='))?.split('=')[1] || 'http://localhost:3000';
             const outArg = args.find(a => a.startsWith('--out='))?.split('=')[1] || './dolphin-client.js';
             const keyArg = args.find(a => a.startsWith('--key='))?.split('=')[1] || '';
+            const platformArg = args.find(a => a.startsWith('--platform='))?.split('=')[1] || 'web';
             CLIUI.heading('Generating Dolphin Client SDK');
             CLIUI.startSpinner(`Fetching schema from ${urlArg}...`);
             try {
                 const fetchUrlJS = urlArg.replace(/\/$/, '') + '/dolphin-client.js';
                 const fetchUrlDTS = urlArg.replace(/\/$/, '') + '/dolphin-client.d.ts';
-                const headers = {};
+                const headers = {
+                    'x-dolphin-platform': platformArg
+                };
                 if (keyArg) {
                     headers['x-dolphin-key'] = keyArg;
                 }

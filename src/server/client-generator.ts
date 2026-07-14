@@ -213,7 +213,11 @@ class DolphinClient {
       if (seg.startsWith(':')) {
         paramsList.push(seg.slice(1));
       } else {
-        cleanSegments.push(seg.replace(/[^a-zA-Z0-9_]/g, '_'));
+        let clean = seg.replace(/[^a-zA-Z0-9_]/g, '_');
+        if (/^[0-9]/.test(clean)) {
+          clean = '_' + clean;
+        }
+        cleanSegments.push(clean);
       }
     }
 
@@ -329,7 +333,24 @@ class DolphinNativeSync {
 }
 `;
 
-  const generatedCode = `
+  const isESM = platform === 'react' || platform === 'esm';
+
+  let generatedCode = '';
+  if (isESM) {
+    generatedCode = `
+${coreCode}
+
+DolphinClient.prototype._initSDK = function() {
+  const client = this;
+  ${methodsCode.join('\n')}
+};
+
+const client = new DolphinClient();
+
+export { DolphinClient, client };
+`;
+  } else {
+    generatedCode = `
 (function(global) {
   ${coreCode}
 
@@ -353,6 +374,7 @@ class DolphinNativeSync {
   }
 })(typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : (typeof global !== 'undefined' ? global : (typeof self !== 'undefined' ? self : this))));
 `;
+  }
 
   return generatedCode;
 }
@@ -370,7 +392,11 @@ export function generateClientDTS(routes: any[], platform?: string): string {
       if (seg.startsWith(':')) {
         paramsList.push(seg.slice(1));
       } else {
-        cleanSegments.push(seg.replace(/[^a-zA-Z0-9_]/g, '_'));
+        let clean = seg.replace(/[^a-zA-Z0-9_]/g, '_');
+        if (/^[0-9]/.test(clean)) {
+          clean = '_' + clean;
+        }
+        cleanSegments.push(clean);
       }
     }
 

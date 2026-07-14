@@ -8,6 +8,7 @@ export * from './authController/authController.js';
 export * from './controller/controller.js';
 export * from './crud/crud.js';
 export * from './middleware/zod.js';
+export * from './middleware/cors.js';
 export * from './adapters/mongoose/index.js';
 export * from './server/server.js';
 export * from './router/router.js';
